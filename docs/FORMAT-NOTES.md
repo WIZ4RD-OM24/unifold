@@ -115,10 +115,32 @@ versions is which repository tables and columns appear inside it — and the `DS
 blocks describe those at runtime. One parser covers both; the version-specific
 knowledge is a table/column mapping, not a separate front end.
 
-**What the custom entities are for** (inferred from exploded content, so the
-role is evidenced even though the codepoints are not). `&uSEP;` separates
-key=value pairs inside packed property strings, and `&uFRM;` delimits widget
-descriptors in the layout column:
+**What the custom entities are for.** Roles are established; codepoints are not.
+
+| Entity | Role | Basis |
+|---|---|---|
+| `&uSEP;` | Uniface list delimiter (the `<GOLD>` semicolon) | Documented list semantics + observed `name=value` lists |
+| `&uNOT;` | Nested-list marker: the `!` prefixed to a delimiter when one list is embedded in another | Documented nesting rule + it never occurs except immediately before `&uSEP;` |
+| `&uFRM;` | Widget-descriptor delimiter in the layout column | Observed, `FORMPIC` only |
+| `&uALL;` | Unknown | Seen once, no context yet |
+
+Observed in a real export, showing a nested list — `ITEM1`/`ITEM2` inner,
+`ITEM3` outer:
+
+```
+"ITEM1<uNOT><uSEP>ITEM2<uNOT><uSEP>ITEM3<uSEP>ITEM4<uNOT><uSEP>"
+```
+
+**The codepoints are not needed for round-tripping.** An earlier note here
+claimed `implode` would need them. It does not: the entity reference is the form
+Uniface itself writes, so preserving the entity name losslessly through
+`explode` and writing `&uSEP;` back in `implode` reproduces the original exactly
+without ever resolving the character. The true codepoints matter only for
+*displaying* the real character, which is cosmetic. `UNIFACE.DTD` would be nice
+to have; it is not on the critical path.
+
+`&uSEP;` separates key=value pairs inside packed property strings, and `&uFRM;`
+delimits widget descriptors in the layout column:
 
 ```
 WINPROP: CAPTION=<uSEP>CANRESIZE=<uSEP>MODAL=T<uSEP>SPLIT=
@@ -130,8 +152,10 @@ blob — parseable into something readable once the separators are pinned down.
 
 ### Still open after measurement
 
-- The actual codepoints of `&uSEP;`, `&uFRM;` and `&uALL;` (roles above are
-  evidenced; the byte values are not, and `implode` will need them).
+- The actual codepoints of the custom entities. Cosmetic only — see above; not
+  required for `explode` or `implode`. `UNIFACE.DTD` is not distributed with
+  exports and was not found in a Uniface installation or anywhere public.
+- What `&uALL;` marks. One occurrence seen, no surrounding context yet.
 - The meaning of the packed `varinfo` attribute on `FLD` (observed values embed
   escapes such as `\1D`, `\1E`, `\1F`).
 - `FLD@type` codes: `B`, `E`, `N`, `S` observed; `B` carries ProcScript.

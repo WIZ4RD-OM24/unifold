@@ -188,10 +188,10 @@ repository tables, only `repversion` differs (`8` against `5`). Both `probe` and
 
 Versions verified end to end: **9.7, 10.2, 10.4**.
 
-One thing still outstanding: the real codepoints behind `&uSEP;` / `&uFRM;` /
-`&uALL;` / `&uNOT;`, from a copy of `UNIFACE.DTD`. `implode` needs them to
-round-trip safely, and they would also let `FORMPIC` be rendered as a readable
-layout rather than delimiter soup.
+Nothing external is blocking. `UNIFACE.DTD` turned out not to be on the critical
+path: the entity reference is the form Uniface itself writes, so preserving the
+entity name losslessly is enough to round-trip. Resolving the codepoints would
+only let the real characters be *displayed*, which is cosmetic.
 
 Two documented routes:
 
