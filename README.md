@@ -10,26 +10,22 @@ you text, but text shaped like a serialised repository transaction, not like
 source code. A three-line ProcScript change produces a diff nobody can review.
 
 `unifold` closes that gap: export XML in, a clean directory tree of `.proc` and
-`.yaml` files out, stable enough that git diffs are readable and Claude Code can
-work on the result.
+`.txt` files out, stable enough that git diffs are readable and Claude Code can
+work on the result — and back again, verifiably unchanged.
 
 Verified against real exports from **Uniface 9.7, 10.2 and 10.4**, all through
 one code path. Read-only — `unifold` never writes to your repository.
 
-Both versions export XML rooted at `<UNIFACE>`, but Uniface 10 restructured the
-repository, so the element vocabulary and nesting differ. That is a mapping
-problem, not two tools:
+The versions turned out to need no per-version handling at all. Every export —
+9.7, 10.2, 10.4 — uses the same six-element container, and the format describes
+its own schema inline, so one code path reads them all. Measurement replaced
+what was going to be a mapping layer:
 
 ```
-9.7 export ─┐
-            ├─► dialect detector ─► per-version mapping ─► neutral model ─► same output tree
-10.4 export ┘
+9.7 / 10.2 / 10.4 export ─► self-describing reader ─► same output tree
 ```
 
-`probe`, `compare` and `schemadiff` are already version-agnostic — they assume
-nothing beyond well-formed XML. Only the mapping layer is version-specific.
-
-Because both dialects explode to the same tree, a component can be diffed
+Because every version explodes to the same tree, a component can also be diffed
 across a 9.7 → 10.x migration, which is otherwise painful to verify.
 
 ## Status
@@ -38,7 +34,8 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 **Phase 1 — shipped.** `explode` turns real exports into readable source.
 **Phase 2 — shipped.** `implode` rebuilds exports; `roundtrip` proves fidelity.
 **Phase 3 — shipped.** Packed lists decoded, including a form layout sketch.
-**Phase 4 — next.** Semantic naming; static analysis.
+**Phase 4 — shipped.** `xref` traces calls across components.
+**Phase 5 — next.** Semantic naming; a navigable workspace index; MCP server.
 
 | Command | Does | Ready |
 |---|---|---|
@@ -48,6 +45,7 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 | `unifold explode FILE OUT/` | Export XML to a readable, diffable source tree | yes |
 | `unifold implode TREE/ OUT.xml` | Rebuild an export file from an edited tree | yes |
 | `unifold roundtrip FILE` | Prove an export survives explode → implode unchanged | yes |
+| `unifold xref WORKSPACE/` | Trace calls across components — who calls this library proc | yes |
 
 ## The format, measured
 
@@ -82,7 +80,7 @@ Three findings that shaped the tool:
   covers both; version-specific knowledge is a table/column mapping.
 - **Real exports do not parse with a stock XML parser.** They carry a UTF-8 BOM
   and reference a `UNIFACE.DTD` that is not shipped with them, using custom
-  entities (`&uSEP;`, `&uFRM;`, `&uALL;`) that a standard parser rejects as
+  entities (`&uSEP;`, `&uFRM;`, `&uNOT;`, `&uALL;`) that a standard parser rejects as
   undefined. `unifold` handles both.
 
 Full detail, including what is still unknown, in
@@ -122,17 +120,23 @@ PYTHONPATH=src py -3 -m unifold.cli probe path/to/export.xml
 ```
 
 ```
+bom               utf-8-sig
+declared encoding UTF-8
 root element      UNIFACE
-distinct paths    7
+distinct paths    6
 
 <UNIFACE>  n=1
-  <UFORM>  n=1
-    @NAME                     required, len 9-9
-    <UPROC>  n=2 x2
-      @TRIGGER                  required, enum{EXEC, QUIT}
-      #text  2/2 non-empty, len 102-208  [multiline(2), procscript?(2)]
-    <ULAYOUT>  n=1
-      #text  1/1 non-empty, len 152-152  [base64(1)]
+  @release                  required, enum{9.7}
+  <TABLE>  n=2 x2
+    <DSC>  n=2
+      @name                     required, enum{ULIBR, USOURCE}
+      <FLD>  n=25 x22
+        @name                     required, len 4-10
+        @type                     required, enum{B, E, N, S}
+    <OCC>  n=2
+      <DAT>  n=8 x7
+        @name                     required, enum{UDESCR, ULABEL, UTEXT, ...}
+        #text  8/8 non-empty, len 1-1040  [text(7), multiline(1), procscript?(1)]
 ```
 
 Explode an export into readable source:
@@ -239,6 +243,44 @@ line breaks and attribute wrapping are cosmetic and unrecorded. Semantic
 identity — same elements, attributes, values and order — is the goal, because
 that is what Uniface imports.
 
+### Tracing across components
+
+The IDE is good at navigating one component and has no answer for questions
+that span components. Explode several exports into one directory, then:
+
+```bash
+PYTHONPATH=src py -3 -m unifold.cli xref C:/work/workspace --symbol OccurrenceSetFieldColors
+```
+
+```
+Defined in 2 place(s)
+  entry      HILIGHTROW_Include_Proc/USOURCE/HILIGHTROW/UTEXT.proc:1
+  entry      cpt_showemployeeswithhighlight/UFORM/SHOWEMPLOYEES/USCRIPT.proc:20
+
+Called from 7 place(s)
+  call     bootstrap_model/UCGROUP/EMPLOYEE/UOCC_SCRIPT.proc:45
+  call     cpt_showemployeeswithhighlight/UXGROUP/EMPLOYEE/UOCC_SCRIPT.proc:6
+  call     prj_full_demoproject/UCGROUP/EMPLOYEE/UOCC_SCRIPT.proc:45
+  ...
+```
+
+Without `--symbol` it summarises the workspace, including:
+
+- **called but not defined here** — global library procs and services you
+  haven't exported, so you know what the workspace depends on;
+- **entries nothing here calls** — dead-code candidates.
+
+Triggers and operations are deliberately excluded from the dead-code list: the
+runtime fires triggers and other components activate operations, so silence in
+the workspace proves nothing about them. Entries are the only fair candidates,
+and even those may be called from something unexported — confirm before
+deleting.
+
+Definition and reference forms come from real exports, not invention: `entry`,
+`operation` and `trigger` definitions; `call NAME(...)` and
+`activate "SERVICE".OPERATION(...)` references. Comments are stripped before
+indexing, respecting quoted strings, so commented-out calls don't register.
+
 Check whether exports are stable — export the same **unchanged** object twice,
 then:
 
@@ -303,6 +345,7 @@ src/unifold/schemadiff.py 9.7-vs-10.4 dialect comparison
 src/unifold/explode.py    export XML -> readable source tree
 src/unifold/implode.py    readable tree -> export XML, plus fidelity checking
 src/unifold/packed.py     decoding Uniface packed lists and form layouts
+src/unifold/xref.py       cross-component call graph
 src/unifold/cli.py        command line
 scripts/fetch_samples.py  downloads the real exports into samples/
 docs/FORMAT-NOTES.md      the format as measured, plus what is still unknown

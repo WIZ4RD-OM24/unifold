@@ -13,6 +13,7 @@ from . import explode as explode_mod
 from . import implode as implode_mod
 from . import probe as probe_mod
 from . import schemadiff as schemadiff_mod
+from . import xref as xref_mod
 
 __version__ = "0.1.0"
 
@@ -98,6 +99,25 @@ def cmd_roundtrip(args) -> int:
         result = implode_mod.roundtrip(path, Path(work))
     print(implode_mod.render_roundtrip(result))
     return 0 if result.ok else 1
+
+
+def cmd_xref(args) -> int:
+    root = Path(args.workspace)
+    if not root.is_dir():
+        print("no such directory: %s" % root, file=sys.stderr)
+        return 2
+    index = xref_mod.build(root)
+    if args.json:
+        print(xref_mod.to_json(index))
+    elif args.symbol:
+        print(xref_mod.render_symbol(index, args.symbol))
+    else:
+        print(xref_mod.render(
+            index,
+            show_unresolved=not args.uncalled,
+            show_uncalled=not args.unresolved,
+        ))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -206,6 +226,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     r.add_argument("file", help="path to a Uniface export file")
     r.set_defaults(func=cmd_roundtrip)
+
+    x = sub.add_parser(
+        "xref",
+        help="cross-reference ProcScript across exploded trees",
+        description=(
+            "Indexes entry/operation/trigger definitions and call/activate "
+            "references across a whole workspace, so you can trace a library "
+            "proc across components -- the question the IDE cannot answer. "
+            "A workspace is any directory containing exploded trees."
+        ),
+    )
+    x.add_argument("workspace", help="directory containing exploded tree(s)")
+    x.add_argument("--symbol", metavar="NAME",
+                   help="show where one name is defined and called")
+    x.add_argument("--unresolved", action="store_true",
+                   help="only what is called but not defined here")
+    x.add_argument("--uncalled", action="store_true",
+                   help="only entries nothing here calls")
+    x.add_argument("--json", action="store_true", help="machine-readable output")
+    x.set_defaults(func=cmd_xref)
 
     return parser
 
