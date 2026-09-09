@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import compare as compare_mod
 from . import probe as probe_mod
+from . import schemadiff as schemadiff_mod
 
 __version__ = "0.1.0"
 
@@ -35,6 +36,23 @@ def cmd_compare(args) -> int:
     result = compare_mod.compare(left, right, drop=drop)
     print(compare_mod.render(result))
     return 0 if result.sorted_identical else 1
+
+
+def cmd_schemadiff(args) -> int:
+    left, right = Path(args.left), Path(args.right)
+    for p in (left, right):
+        if not p.is_file():
+            print("no such file: %s" % p, file=sys.stderr)
+            return 2
+    lres = probe_mod.probe(left)
+    rres = probe_mod.probe(right)
+    result = schemadiff_mod.diff(
+        lres, rres,
+        left_label=args.left_label or left.name,
+        right_label=args.right_label or right.name,
+    )
+    print(schemadiff_mod.render(result))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,6 +97,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="attribute to exclude (repeatable) -- e.g. an export timestamp",
     )
     c.set_defaults(func=cmd_compare)
+
+    s = sub.add_parser(
+        "schemadiff",
+        help="diff the schemas of two exports (e.g. 9.7 against 10.4)",
+        description=(
+            "Probes two exports and reports how their schemas differ: paths "
+            "unique to each, attribute differences on shared paths, and how "
+            "much element vocabulary they have in common. This is the evidence "
+            "the per-version mappings are written against."
+        ),
+    )
+    s.add_argument("left")
+    s.add_argument("right")
+    s.add_argument("--left-label", metavar="NAME", help='e.g. "9.7"')
+    s.add_argument("--right-label", metavar="NAME", help='e.g. "10.4"')
+    s.set_defaults(func=cmd_schemadiff)
 
     return parser
 

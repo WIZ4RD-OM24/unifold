@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE - NOT A REAL UNIFACE EXPORT, AND NOT THE 10.4 SCHEMA.
+  This stands in for "a second dialect with the same concepts under different
+  names", purely to exercise schemadiff. The element names are invented. Do NOT
+  read this as evidence about what a 10.x export looks like - that has to come
+  from a real file.
+
+  Concepts deliberately kept parallel to synthetic_component.xml:
+    UFORM    -> COMPONENT      UENTITY -> MODELENTITY
+    UPROC    -> SCRIPT         UFIELD  -> FIELD
+    ULAYOUT  -> PRESENTATION
+-->
+<UNIFACE VERSION="10.4.03" EXPORTED="2026-09-09T12:00:00">
+  <COMPONENT NAME="PCUSTOMER" LABEL="Customer maintenance" KIND="FORM" GUID="a1b2c3d4">
+    <SCRIPT EVENT="EXEC" LANGUAGE="PROC"><![CDATA[
+trigger exec
+  activate "SRV_CUSTOMER".INIT()
+  if ($status < 0)
+    message "Could not initialise customer service"
+    return -1
+  endif
+  retrieve/e
+endtrigger
+]]></SCRIPT>
+    <MODELENTITY NAME="CUSTOMER" MODEL="APPMODEL" SEQ="1">
+      <FIELD NAME="CUSTNO" DATATYPE="NUMERIC" LENGTH="8" PRIMARYKEY="true"/>
+      <FIELD NAME="NAME" DATATYPE="STRING" LENGTH="60" PRIMARYKEY="false"/>
+      <SCRIPT EVENT="VALIDATE" LANGUAGE="PROC"><![CDATA[
+trigger validate
+  if (NAME = "")
+    message "Name is required"
+    return -1
+  endif
+endtrigger
+]]></SCRIPT>
+    </MODELENTITY>
+    <PRESENTATION FORMAT="JSON">{"widgets":[{"type":"grid","rows":12}]}</PRESENTATION>
+  </COMPONENT>
+</UNIFACE>

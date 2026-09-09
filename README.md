@@ -13,7 +13,24 @@ source code. A three-line ProcScript change produces a diff nobody can review.
 `.yaml` files out, stable enough that git diffs are readable and Claude Code can
 work on the result.
 
-Target: **Uniface 9.7**. Read-only — `unifold` never writes to your repository.
+Target: **Uniface 9.7 and 10.4**. Read-only — `unifold` never writes to your
+repository.
+
+Both versions export XML rooted at `<UNIFACE>`, but Uniface 10 restructured the
+repository, so the element vocabulary and nesting differ. That is a mapping
+problem, not two tools:
+
+```
+9.7 export ─┐
+            ├─► dialect detector ─► per-version mapping ─► neutral model ─► same output tree
+10.4 export ┘
+```
+
+`probe`, `compare` and `schemadiff` are already version-agnostic — they assume
+nothing beyond well-formed XML. Only the mapping layer is version-specific.
+
+Because both dialects explode to the same tree, a component can be diffed
+across a 9.7 → 10.x migration, which is otherwise painful to verify.
 
 ## Status
 
@@ -24,6 +41,7 @@ Target: **Uniface 9.7**. Read-only — `unifold` never writes to your repository
 |---|---|---|
 | `unifold probe FILE` | Reports an export's real element tree, attribute cardinalities, and where ProcScript and encoded blobs live | yes |
 | `unifold compare A B` | Tells you whether two exports of an unchanged object differ genuinely, cosmetically, or only in ordering | yes |
+| `unifold schemadiff A B` | Diffs two dialects' schemas (9.7 vs 10.4) — the evidence the per-version mappings are written against | yes |
 | `unifold explode FILE OUT/` | Export XML to a readable source tree | not yet |
 
 ## Why there is no schema in this repo
@@ -81,9 +99,11 @@ Exit status is 0 when the two agree once ordering is normalised.
 
 ## What's needed next
 
-Phase 1 needs **one or two real Uniface 9.7 export files**. Nothing else is
-blocking. Any component will do — the smaller and less sensitive the better,
-and a demo or scratch component is ideal.
+Phase 1 needs **real export files — ideally one from 9.7 and one from 10.4**.
+Nothing else is blocking. Any component will do; the smaller and less sensitive
+the better, and a demo or scratch component is ideal. The same component
+exported from both versions is the single most useful thing, because
+`schemadiff` can then map the two dialects onto each other directly.
 
 Two documented routes:
 
@@ -104,9 +124,10 @@ Drop the files in `samples/` (gitignored) or `tests/fixtures/real/`.
 ## Layout
 
 ```
-src/unifold/probe.py     schema discovery, content classification
-src/unifold/compare.py   export stability measurement
-src/unifold/cli.py       command line
+src/unifold/probe.py      schema discovery, content classification
+src/unifold/compare.py    export stability measurement
+src/unifold/schemadiff.py 9.7-vs-10.4 dialect comparison
+src/unifold/cli.py        command line
 docs/FORMAT-NOTES.md     what is established about the format, with sources
 tests/fixtures/          SYNTHETIC fixtures - invented, not real exports
 ```

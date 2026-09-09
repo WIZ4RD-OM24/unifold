@@ -51,7 +51,25 @@ tool assumes a directory of text files.
   directory tree defined by the assignment and joins files, one file per
   component.
 
-## Open questions — must be answered from a real 9.7 export file
+## Supporting 9.7 and 10.4 together
+
+Both versions export XML rooted at `UNIFACE`, so the file-level contract is
+shared. What differs is the vocabulary: Uniface 10 restructured the repository
+and the IDE, and 10.x documentation carries a dedicated `exportFileFormat` page
+that the 9.7 tree does not. We therefore expect different element names and
+nesting for the same underlying concepts (component, entity, field, trigger,
+ProcScript, layout).
+
+The design consequence is that only the mapping layer is version-specific. The
+neutral model must be the union of both repository models, or it silently loses
+whatever one version expresses and the other does not — which is why it cannot
+be designed before both dialects have been measured.
+
+Note also that 10.x users already have partial alternatives (Git integration,
+UD6 from 10.2.2), whereas 9.7 users have essentially nothing. The 9.7 gap is
+the more acute one even though the tool targets both.
+
+## Open questions — must be answered from real export files
 
 These are exactly what `unifold probe` is built to answer:
 
@@ -71,6 +89,10 @@ These are exactly what `unifold probe` is built to answer:
    version control.
 6. Whether one file holds one object or many, under the 9.7 "separate file per
    component" clustering preference.
+7. How far the 9.7 and 10.4 vocabularies actually diverge, and whether every
+   9.7 concept has a 10.4 counterpart (and vice versa). `unifold schemadiff`
+   answers this directly once both files exist. Anything expressible in one
+   dialect but not the other constrains the neutral model.
 
 ## Sources
 

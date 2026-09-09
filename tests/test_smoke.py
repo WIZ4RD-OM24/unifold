@@ -14,10 +14,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from unifold import compare as compare_mod  # noqa: E402
 from unifold import probe as probe_mod  # noqa: E402
+from unifold import schemadiff as schemadiff_mod  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures"
 A = FIXTURES / "synthetic_component.xml"
 B = FIXTURES / "synthetic_component_reexported.xml"
+DIALECT_B = FIXTURES / "synthetic_dialect_b.xml"
 
 
 class TestClassify(unittest.TestCase):
@@ -99,6 +101,44 @@ class TestCompare(unittest.TestCase):
         result = compare_mod.compare(A, A)
         self.assertTrue(result.byte_identical)
         self.assertIn("fully deterministic", result.verdict)
+
+
+class TestSchemaDiff(unittest.TestCase):
+    def setUp(self):
+        self.diff = schemadiff_mod.diff(
+            probe_mod.probe(A), probe_mod.probe(DIALECT_B), "9.7-ish", "10.4-ish"
+        )
+
+    def test_identical_schema_needs_one_mapping(self):
+        same = schemadiff_mod.diff(probe_mod.probe(A), probe_mod.probe(A))
+        self.assertEqual(same.only_left, [])
+        self.assertEqual(same.only_right, [])
+        self.assertEqual(same.attr_deltas, {})
+        self.assertEqual(same.vocab_overlap, 1.0)
+        self.assertIn("one mapping covers both", same.verdict)
+
+    def test_reordered_reexport_has_identical_schema(self):
+        # Same dialect, shuffled content -- schema must be identical even though
+        # the documents are not.
+        same = schemadiff_mod.diff(probe_mod.probe(A), probe_mod.probe(B))
+        self.assertEqual(same.only_left, [])
+        self.assertEqual(same.only_right, [])
+
+    def test_divergent_dialects_are_reported_as_divergent(self):
+        self.assertEqual(self.diff.shared, ["UNIFACE"])
+        self.assertIn("UNIFACE/UFORM", self.diff.only_left)
+        self.assertIn("UNIFACE/COMPONENT", self.diff.only_right)
+        self.assertLess(self.diff.vocab_overlap, 0.3)
+        self.assertIn("concept by concept", self.diff.verdict)
+
+    def test_attribute_delta_on_a_shared_path(self):
+        # Both roots are UNIFACE with the same attributes, so no delta there.
+        self.assertNotIn("UNIFACE", self.diff.attr_deltas)
+
+    def test_render_mentions_both_labels(self):
+        text = schemadiff_mod.render(self.diff)
+        self.assertIn("9.7-ish", text)
+        self.assertIn("10.4-ish", text)
 
 
 if __name__ == "__main__":
