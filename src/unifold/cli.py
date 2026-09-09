@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from . import compare as compare_mod
+from . import explode as explode_mod
 from . import probe as probe_mod
 from . import schemadiff as schemadiff_mod
 
@@ -52,6 +53,22 @@ def cmd_schemadiff(args) -> int:
         right_label=args.right_label or right.name,
     )
     print(schemadiff_mod.render(result))
+    return 0
+
+
+def cmd_explode(args) -> int:
+    path = Path(args.file)
+    if not path.is_file():
+        print("no such file: %s" % path, file=sys.stderr)
+        return 2
+    try:
+        result = explode_mod.explode(
+            path, Path(args.out), force=args.force, dry_run=args.dry_run
+        )
+    except FileExistsError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(explode_mod.render(result, dry_run=args.dry_run))
     return 0
 
 
@@ -113,6 +130,24 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--left-label", metavar="NAME", help='e.g. "9.7"')
     s.add_argument("--right-label", metavar="NAME", help='e.g. "10.4"')
     s.set_defaults(func=cmd_schemadiff)
+
+    e = sub.add_parser(
+        "explode",
+        help="write an export out as a readable, diffable source tree",
+        description=(
+            "Writes one directory per repository occurrence: scalar columns "
+            "into properties.txt, and every multi-line or long column -- the "
+            "ProcScript -- into its own file. Read-only with respect to your "
+            "Uniface repository; it only ever writes to the output directory."
+        ),
+    )
+    e.add_argument("file", help="path to a Uniface export file")
+    e.add_argument("out", help="output directory")
+    e.add_argument("--force", action="store_true",
+                   help="write into a non-empty output directory")
+    e.add_argument("--dry-run", action="store_true",
+                   help="list the files that would be written, write nothing")
+    e.set_defaults(func=cmd_explode)
 
     return parser
 

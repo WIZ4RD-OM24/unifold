@@ -35,14 +35,15 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 ## Status
 
 **Phase 0 — shipped.** Format discovery and stability measurement.
-**Phase 1 — blocked on a real export file.** See "What's needed next".
+**Phase 1 — shipped.** `explode` turns real exports into readable source.
+**Phase 2 — next.** `implode` (write back), and semantic naming.
 
 | Command | Does | Ready |
 |---|---|---|
 | `unifold probe FILE` | Reports an export's real element tree, attribute cardinalities, and where ProcScript and encoded blobs live | yes |
 | `unifold compare A B` | Tells you whether two exports of an unchanged object differ genuinely, cosmetically, or only in ordering | yes |
 | `unifold schemadiff A B` | Diffs two dialects' schemas (9.7 vs 10.4) — the evidence the per-version mappings are written against | yes |
-| `unifold explode FILE OUT/` | Export XML to a readable source tree | not yet |
+| `unifold explode FILE OUT/` | Export XML to a readable, diffable source tree | yes |
 
 ## The format, measured
 
@@ -130,6 +131,37 @@ distinct paths    7
       #text  1/1 non-empty, len 152-152  [base64(1)]
 ```
 
+Explode an export into readable source:
+
+```bash
+PYTHONPATH=src py -3 -m unifold.cli explode samples/learn-palettes/cpt_showemployees.xml out/
+```
+
+```
+out/
+  manifest.txt                          what this export contained
+  UFORM/SHOWEMPLOYEES/
+    properties.txt                      every scalar column, sorted
+    USCRIPT.proc                        the component's ProcScript
+    FORMPIC.txt                         the form layout
+  UXGROUP/EMPLOYEE/properties.txt       the component's entity
+  UXFIELD/NAME/properties.txt           its fields
+```
+
+Two decisions worth knowing about:
+
+- **No semantic renaming.** Table and column names stay exactly as Uniface uses
+  them (`UXGROUP`, not `entity`). A friendlier vocabulary would be a mapping
+  claim we have not earned yet, and a wrong name is worse than an unfamiliar
+  one.
+- **Content decides the split, not a hardcoded list.** A column becomes its own
+  file when its value is multi-line or long, and a `properties.txt` line
+  otherwise. `UFORM` alone has 69 columns and the trigger set varies by table
+  and version, so a curated list would rot; measuring the value does not.
+
+`explode` refuses to write into a non-empty directory unless you pass
+`--force`, and `--dry-run` lists what it would write without touching disk.
+
 Check whether exports are stable — export the same **unchanged** object twice,
 then:
 
@@ -143,17 +175,19 @@ Exit status is 0 when the two agree once ordering is normalised.
 
 ## What's needed next
 
-Phase 1 — `explode` — is no longer blocked. The format is measured and the
-public samples are enough to build and test against.
+`explode` works on real 9.7 and 10.2 exports today, through a single code path.
 
-One thing still cannot be answered from published samples: **is re-exporting an
-unchanged object byte-stable?** That needs the same component exported twice
-from a live repository, and it decides how much canonicalisation `explode` must
-do to keep git diffs readable. `compare` is built and waiting for those two
-files.
+Still unanswerable from published samples: **is re-exporting an unchanged object
+byte-stable?** That needs the same component exported twice from a live
+repository. `explode` already sorts tables, occurrences and columns, so ordering
+churn inside the XML cannot reach the output — but if Uniface rewrites
+timestamps or version counters on every export, `properties.txt` will churn and
+those columns will need excluding. `compare` is built and waiting for the two
+files that settle it.
 
-A 10.4 export would also be worth having, to confirm nothing changed between
-the 10.2 measured here and 10.4.
+Also worth having: a genuine **10.4** export, to confirm nothing moved between
+the 10.2 measured here and 10.4; and the real codepoints behind `&uSEP;` /
+`&uFRM;` / `&uALL;`, which `implode` will need in order to round-trip safely.
 
 Two documented routes:
 
@@ -177,6 +211,7 @@ Drop the files in `samples/` (gitignored) or `tests/fixtures/real/`.
 src/unifold/probe.py      schema discovery, content classification
 src/unifold/compare.py    export stability measurement
 src/unifold/schemadiff.py 9.7-vs-10.4 dialect comparison
+src/unifold/explode.py    export XML -> readable source tree
 src/unifold/cli.py        command line
 scripts/fetch_samples.py  downloads the real exports into samples/
 docs/FORMAT-NOTES.md      the format as measured, plus what is still unknown

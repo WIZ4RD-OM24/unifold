@@ -113,9 +113,23 @@ versions is which repository tables and columns appear inside it — and the `DS
 blocks describe those at runtime. One parser covers both; the version-specific
 knowledge is a table/column mapping, not a separate front end.
 
+**What the custom entities are for** (inferred from exploded content, so the
+role is evidenced even though the codepoints are not). `&uSEP;` separates
+key=value pairs inside packed property strings, and `&uFRM;` delimits widget
+descriptors in the layout column:
+
+```
+WINPROP: CAPTION=<uSEP>CANRESIZE=<uSEP>MODAL=T<uSEP>SPLIT=
+FORMPIC: <uFRM>TYP=F<uSEP>NAM=LASTNAME<uSEP>WID=28<uSEP>HEI=1<uFRM>
+```
+
+So `FORMPIC` is the form layout, and it is structured text rather than an opaque
+blob — parseable into something readable once the separators are pinned down.
+
 ### Still open after measurement
 
-- The real values of `&uSEP;`, `&uFRM;` and `&uALL;`.
+- The actual codepoints of `&uSEP;`, `&uFRM;` and `&uALL;` (roles above are
+  evidenced; the byte values are not, and `implode` will need them).
 - The meaning of the packed `varinfo` attribute on `FLD` (observed values embed
   escapes such as `\1D`, `\1E`, `\1F`).
 - `FLD@type` codes: `B`, `E`, `N`, `S` observed; `B` carries ProcScript.
