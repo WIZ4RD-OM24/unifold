@@ -177,17 +177,18 @@ Exit status is 0 when the two agree once ordering is normalised.
 
 `explode` works on real 9.7 and 10.2 exports today, through a single code path.
 
-Still unanswerable from published samples: **is re-exporting an unchanged object
-byte-stable?** That needs the same component exported twice from a live
-repository. `explode` already sorts tables, occurrences and columns, so ordering
-churn inside the XML cannot reach the output — but if Uniface rewrites
-timestamps or version counters on every export, `properties.txt` will churn and
-those columns will need excluding. `compare` is built and waiting for the two
-files that settle it.
+**Exports are byte-stable**, confirmed against a live repository: the same
+component exported twice, unchanged, produced identical bytes. Nothing is
+stamped at export time, so no column needs excluding and git diffs stay clean.
+That was the last question blocking the design.
 
-Also worth having: a genuine **10.4** export, to confirm nothing moved between
-the 10.2 measured here and 10.4; and the real codepoints behind `&uSEP;` /
-`&uFRM;` / `&uALL;`, which `implode` will need in order to round-trip safely.
+Still worth having:
+
+- A genuine **10.4** export, to confirm nothing moved between the 10.2 measured
+  here and 10.4.
+- The real codepoints behind `&uSEP;` / `&uFRM;` / `&uALL;`, from a copy of
+  `UNIFACE.DTD`. `implode` needs them to round-trip safely, and they would also
+  let `FORMPIC` be rendered as a readable layout rather than delimiter soup.
 
 Two documented routes:
 

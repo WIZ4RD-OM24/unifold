@@ -133,10 +133,29 @@ blob — parseable into something readable once the separators are pinned down.
 - The meaning of the packed `varinfo` attribute on `FLD` (observed values embed
   escapes such as `\1D`, `\1E`, `\1F`).
 - `FLD@type` codes: `B`, `E`, `N`, `S` observed; `B` carries ProcScript.
-- Whether re-exporting an unchanged object is byte-stable. `compare` is built
-  for this and it remains unanswered — it needs two exports of the same object,
-  which the published samples cannot provide.
 - Whether 10.4 differs from the 10.2 measured here.
+
+**Answered: exports are byte-stable.** A component exported twice from a live
+repository, unchanged in between, produced byte-identical files (`compare`
+verdict: "identical bytes -- export is fully deterministic"). Uniface stamps
+nothing at export time — no export timestamp, no regenerated counters, no
+reordering of tables, rows or columns.
+
+Two consequences:
+
+- No column needs excluding from `properties.txt`. `UTIMESTAMP`, `UKVERSION`
+  and `UMVERSION` appear in the output, but they are stored properties of the
+  object rather than export-time artefacts, so they only change when the object
+  does.
+- `explode`'s sorting of tables, occurrences and columns is defensive rather
+  than load-bearing. It stays, because determinism should not depend on the
+  vendor continuing to be well behaved, but it is not doing work today.
+
+This is what makes the whole idea viable: a three-line ProcScript change
+produces a three-line diff.
+
+Caveat on scope: one component, one repository, one run. It is strong evidence,
+not a guarantee across every object type and version.
 
 ## Supporting 9.7 and 10.4 together
 
@@ -158,10 +177,10 @@ the more acute one even though the tool targets both.
 
 ## Original open questions (kept for the record)
 
-Most are now answered by the measured section above: the schema is known (1),
+All six are now answered by the measured section above: the schema is known (1),
 ProcScript is verbatim text in `DAT` (2), nothing is base64 or compressed (3),
-encoding is UTF-8 with a BOM (4), and one file holds many tables (6). Question
-(5), export stability, is still open.
+encoding is UTF-8 with a BOM (4), exports are byte-stable (5), and one file
+holds many tables (6).
 
 
 
