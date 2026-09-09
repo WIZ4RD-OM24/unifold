@@ -148,7 +148,11 @@ FORMPIC: <uFRM>TYP=F<uSEP>NAM=LASTNAME<uSEP>WID=28<uSEP>HEI=1<uFRM>
 ```
 
 So `FORMPIC` is the form layout, and it is structured text rather than an opaque
-blob — parseable into something readable once the separators are pinned down.
+blob. `src/unifold/packed.py` decodes both forms: `uSEP` lists (with `uNOT`
+nesting stripped recursively) render as key/value pairs, and `FORMPIC` renders
+as a sketch of the form, each widget padded to its declared `WID` so the
+proportions survive. The text between `uFRM` pairs turns out to be genuine
+layout whitespace, which is what makes the sketch possible at all.
 
 ### Still open after measurement
 

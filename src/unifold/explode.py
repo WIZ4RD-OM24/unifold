@@ -40,11 +40,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from . import packed
 from .probe import PROC_RE, placeholder_for, prepare
 
 SIDECAR = "_unifold.json"
 MANIFEST = "manifest.txt"
 PROPERTIES = "properties.txt"
+DECODED = "decoded.txt"
 
 # A value at or under this length with no newline is a property, not a file.
 INLINE_MAX = 200
@@ -244,6 +246,10 @@ def explode(path: Path, out_dir: Path, force: bool = False,
             for column in sorted(properties, key=lambda c: c.name):
                 body.write("%s: %s\n" % (column.name, column.value))
             planned.append(("%s/%s" % (base, PROPERTIES), body.getvalue()))
+
+        decoded = packed.render_occurrence(occ.columns)
+        if decoded:
+            planned.append(("%s/%s" % (base, DECODED), decoded))
 
         entries = []
         used: set = set()

@@ -37,7 +37,8 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 **Phase 0 — shipped.** Format discovery and stability measurement.
 **Phase 1 — shipped.** `explode` turns real exports into readable source.
 **Phase 2 — shipped.** `implode` rebuilds exports; `roundtrip` proves fidelity.
-**Phase 3 — next.** Rendering `FORMPIC` as a readable layout; semantic naming.
+**Phase 3 — shipped.** Packed lists decoded, including a form layout sketch.
+**Phase 4 — next.** Semantic naming; static analysis.
 
 | Command | Does | Ready |
 |---|---|---|
@@ -147,9 +148,47 @@ out/
     properties.txt                      every scalar column, sorted
     USCRIPT.proc                        the component's ProcScript
     FORMPIC.txt                         the form layout
+    decoded.txt                         packed lists, made readable
   UXGROUP/EMPLOYEE/properties.txt       the component's entity
   UXFIELD/NAME/properties.txt           its fields
 ```
+
+### Decoded views
+
+Uniface packs a lot of structure into delimited strings. As stored, they are
+unreadable:
+
+```
+FORMPIC: <uFRM>TYP=F<uSEP>NAM=LASTNAME<uSEP>WID=28<uSEP>HEI=1<uFRM>
+WINPROP: CAPTION=<uSEP>CANRESIZE=<uSEP>MODAL=T<uSEP>SPLIT=
+```
+
+`decoded.txt` renders them. `FORMPIC` becomes a sketch of the form, with each
+field padded to its declared width so the proportions survive:
+
+```
+  [EMPLOYEE.BOOTSTRAP]
+   [NAME]     [LASTNAME]           [BIRTHDATE]  [AGE]   [ROLE]      [EMAIL]
+
+  TYP  NAM                 WID  HEI  HOC  VOC
+  E    EMPLOYEE.BOOTSTRAP  157  26   157  2
+  F    LASTNAME            28   1    -    -
+```
+
+and packed properties become plain key/value lines:
+
+```
+  MODAL      = T
+  CANRESIZE  = (empty)
+```
+
+Nested lists are handled too — Uniface embeds one list in another by prefixing
+`uNOT` to the inner delimiters, and the decoder strips a level and recurses.
+
+**These views are display-only.** `implode` reads the raw values and ignores
+`decoded.txt` entirely, so decoding cannot affect fidelity — a property of the
+design, not something to re-check. Edits there have no effect; change the raw
+column instead.
 
 Two decisions worth knowing about:
 
@@ -263,6 +302,7 @@ src/unifold/compare.py    export stability measurement
 src/unifold/schemadiff.py 9.7-vs-10.4 dialect comparison
 src/unifold/explode.py    export XML -> readable source tree
 src/unifold/implode.py    readable tree -> export XML, plus fidelity checking
+src/unifold/packed.py     decoding Uniface packed lists and form layouts
 src/unifold/cli.py        command line
 scripts/fetch_samples.py  downloads the real exports into samples/
 docs/FORMAT-NOTES.md      the format as measured, plus what is still unknown
