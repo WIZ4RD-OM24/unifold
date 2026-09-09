@@ -51,6 +51,79 @@ tool assumes a directory of text files.
   directory tree defined by the assignment and joins files, one file per
   component.
 
+## MEASURED: the actual export format
+
+Established by probing six real exports published by Rocket in
+`uniface/learn-palettes` — one from 9.7 and five from 10.2, spanning an include
+proc, an application model, three components and a project. Fetch them with
+`py -3 scripts/fetch_samples.py`. This section supersedes guesswork; where it
+contradicts the vendor prose below, believe this section.
+
+**The export is a self-describing relational dump, not a nested object model.**
+This is the central finding and it reshapes the exploder's design.
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>          <!-- preceded by a UTF-8 BOM -->
+<!-- Created by Uniface - (C) Uniface B.V. All rights reserved -->
+<!DOCTYPE UNIFACE PUBLIC "UNIFACE.DTD" "UNIFACE.DTD">
+<UNIFACE release="9.7" xmlengine="2.0">
+<TABLE>
+  <DSC name="USOURCE" model="DICT" system="S" pseudo="73" level="1" ...>
+    <FLD name="UTEXT" seqno="8" type="B" level="2" length="0" .../>
+  </DSC>
+  <OCC>
+    <DAT name="UTEXT" xml:space="preserve">entry OccurrenceSetFieldColors ...</DAT>
+  </OCC>
+</TABLE>
+</UNIFACE>
+```
+
+- `TABLE` — one repository table. A file holds as many as the object needs.
+- `DSC` — that table's schema, carrying its own column definitions as `FLD`
+  elements. The export describes itself; no external schema is required.
+- `OCC` — one occurrence, i.e. one row.
+- `DAT` — one column value, named by `@name`, matching a `FLD` in the `DSC`.
+
+Exactly six element paths appear, in every file, at both versions and for every
+object type: `UNIFACE`, `.../TABLE`, `.../DSC`, `.../DSC/FLD`, `.../OCC`,
+`.../OCC/DAT`. Repository tables observed so far: `ULIBR`, `USOURCE`, `UFORM`.
+
+**ProcScript is stored verbatim as plain text** in `DAT` elements — with
+`xml:space="preserve"`, tabs and all. It is not base64, not compressed, not
+escaped beyond normal XML rules. Extraction is therefore straightforward, which
+is the best possible news for the exploder.
+
+**Two traps that a guessed parser would have hit:**
+
+1. Every export begins with a **UTF-8 BOM**, before the XML declaration.
+2. The `DOCTYPE` references `UNIFACE.DTD`, which is **not shipped with the
+   export**, and the files use custom entities defined in it — `&uSEP;`,
+   `&uFRM;`, `&uALL;`, evidently Uniface separator characters. A standard parser
+   fails outright with "undefined entity". `unifold` rewrites the DOCTYPE with
+   an internal subset declaring each entity as a traceable `[[name]]`
+   placeholder, so files parse and nothing is silently dropped. **Their real
+   character values remain unknown** and must be resolved before `implode` can
+   round-trip safely.
+
+**Version compatibility is far better than expected.** `schemadiff` on the real
+9.7 file against a real 10.2 file reports 100% element-vocabulary overlap, no
+paths unique to either side, and exactly one attribute difference: 10.2 adds
+`repversion` on the root. The container format is shared; what differs between
+versions is which repository tables and columns appear inside it — and the `DSC`
+blocks describe those at runtime. One parser covers both; the version-specific
+knowledge is a table/column mapping, not a separate front end.
+
+### Still open after measurement
+
+- The real values of `&uSEP;`, `&uFRM;` and `&uALL;`.
+- The meaning of the packed `varinfo` attribute on `FLD` (observed values embed
+  escapes such as `\1D`, `\1E`, `\1F`).
+- `FLD@type` codes: `B`, `E`, `N`, `S` observed; `B` carries ProcScript.
+- Whether re-exporting an unchanged object is byte-stable. `compare` is built
+  for this and it remains unanswered — it needs two exports of the same object,
+  which the published samples cannot provide.
+- Whether 10.4 differs from the 10.2 measured here.
+
 ## Supporting 9.7 and 10.4 together
 
 Both versions export XML rooted at `UNIFACE`, so the file-level contract is
@@ -69,7 +142,14 @@ Note also that 10.x users already have partial alternatives (Git integration,
 UD6 from 10.2.2), whereas 9.7 users have essentially nothing. The 9.7 gap is
 the more acute one even though the tool targets both.
 
-## Open questions — must be answered from real export files
+## Original open questions (kept for the record)
+
+Most are now answered by the measured section above: the schema is known (1),
+ProcScript is verbatim text in `DAT` (2), nothing is base64 or compressed (3),
+encoding is UTF-8 with a BOM (4), and one file holds many tables (6). Question
+(5), export stability, is still open.
+
+
 
 These are exactly what `unifold probe` is built to answer:
 

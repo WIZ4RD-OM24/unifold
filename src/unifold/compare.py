@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from .probe import prepare
+
 # Attributes that change on every export regardless of content. Populated from
 # real files via `unifold probe`; empty until we have measured a repository.
 VOLATILE_ATTRS: set = set()
@@ -84,8 +86,9 @@ class CompareResult:
 def compare(left: Path, right: Path, drop: set = None) -> CompareResult:
     drop = drop if drop is not None else VOLATILE_ATTRS
     lb, rb = left.read_bytes(), right.read_bytes()
-    lroot = ET.fromstring(lb)
-    rroot = ET.fromstring(rb)
+    # Real exports reference an undistributed DTD; without this they do not parse.
+    lroot = ET.fromstring(prepare(lb)[0])
+    rroot = ET.fromstring(prepare(rb)[0])
 
     lcanon = canonical(lroot, sort_children=False, drop=drop)
     rcanon = canonical(rroot, sort_children=False, drop=drop)

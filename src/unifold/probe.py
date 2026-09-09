@@ -127,8 +127,17 @@ class NodeProfile:
         self.text_total += n
         for tag in classify(text):
             self.text_tags[tag] += 1
+        # Keep the most substantial values rather than the first ones seen. A
+        # repository table's early columns are short scalars (names, flags,
+        # timestamps); the content worth extracting -- ProcScript, layouts --
+        # arrives later and is long. Sampling by arrival order would hide it.
+        candidate = text.strip()[:SAMPLE_CHARS]
         if len(self.samples) < MAX_SAMPLES:
-            self.samples.append(text.strip()[:SAMPLE_CHARS])
+            self.samples.append(candidate)
+            self.samples.sort(key=len, reverse=True)
+        elif len(candidate) > len(self.samples[-1]):
+            self.samples[-1] = candidate
+            self.samples.sort(key=len, reverse=True)
 
 
 @dataclass
@@ -167,6 +176,47 @@ def sniff_encoding(raw: bytes):
     return bom, None
 
 
+# Entities defined in UNIFACE.DTD, which real exports reference but do not ship.
+# Uniface uses them for its internal separator characters. Their true values are
+# unknown to us, so we substitute a traceable placeholder rather than guess: the
+# name survives into the output and nothing is silently dropped.
+STANDARD_ENTITIES = {"lt", "gt", "amp", "quot", "apos"}
+ENTITY_REF_RE = re.compile(rb"&([A-Za-z_][A-Za-z0-9_.-]*);")
+DOCTYPE_RE = re.compile(rb"<!DOCTYPE\s+[^>\[]*(\[[^\]]*\])?\s*>", re.S)
+
+
+def placeholder_for(name: str) -> str:
+    return "[[%s]]" % name
+
+
+def prepare(raw: bytes):
+    """Make a real Uniface export parseable. Returns (bytes, custom entity names).
+
+    Exports carry `<!DOCTYPE UNIFACE PUBLIC "UNIFACE.DTD" "UNIFACE.DTD">` but the
+    DTD is not distributed with them, so any custom entity is undefined and the
+    parse fails outright. We replace the DOCTYPE with an internal subset that
+    declares every custom entity actually used in the file.
+    """
+    names = sorted({
+        m.group(1).decode("ascii")
+        for m in ENTITY_REF_RE.finditer(raw)
+    } - STANDARD_ENTITIES)
+    if not names:
+        return DOCTYPE_RE.sub(b"", raw, count=1), []
+
+    decls = "".join(
+        '<!ENTITY %s "%s">' % (n, placeholder_for(n)) for n in names
+    )
+    subset = ("<!DOCTYPE UNIFACE [%s]>" % decls).encode("utf-8")
+    prepared, count = DOCTYPE_RE.subn(subset, raw, count=1)
+    if count == 0:
+        # No DOCTYPE to replace: insert the subset after the XML declaration.
+        match = re.match(rb"\s*<\?xml[^>]*\?>", prepared)
+        at = match.end() if match else 0
+        prepared = prepared[:at] + b"\n" + subset + prepared[at:]
+    return prepared, names
+
+
 def probe(path: Path) -> ProbeResult:
     raw = path.read_bytes()
     bom, declared = sniff_encoding(raw)
@@ -174,7 +224,15 @@ def probe(path: Path) -> ProbeResult:
     notes: list = []
     root_tag = None
 
-    lead = raw.lstrip()
+    # Real Uniface exports begin with a UTF-8 BOM, which is not whitespace and
+    # would otherwise fail the "does this look like XML" guard below.
+    lead = raw
+    for sig in (b"\xef\xbb\xbf", b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff",
+                b"\xff\xfe", b"\xfe\xff"):
+        if lead.startswith(sig):
+            lead = lead[len(sig):]
+            break
+    lead = lead.lstrip().lstrip(b"\x00")
     if lead[:1] not in (b"<", b""):
         notes.append(
             "File does not start with '<'. This is probably not XML -- it may be "
@@ -183,13 +241,22 @@ def probe(path: Path) -> ProbeResult:
         )
         return ProbeResult(str(path), len(raw), declared, bom, None, nodes, notes)
 
+    prepared, custom_entities = prepare(raw)
+    if custom_entities:
+        notes.append(
+            "Custom entities declared in UNIFACE.DTD (not shipped with exports) "
+            "were substituted with placeholders so the file could be parsed: "
+            + ", ".join("&%s; -> %s" % (n, placeholder_for(n)) for n in custom_entities)
+            + ". Their real values are unknown -- see docs/FORMAT-NOTES.md."
+        )
+
     stack: list = []
     # Track how many children of each tag a parent accumulates, so we can report
     # true cardinality (is UPROC one-per-component, or many?).
     sibling_counts: list = [Counter()]
 
     try:
-        for event, elem in ET.iterparse(io.BytesIO(raw), events=("start", "end")):
+        for event, elem in ET.iterparse(io.BytesIO(prepared), events=("start", "end")):
             tag = elem.tag
             if event == "start":
                 stack.append(tag)

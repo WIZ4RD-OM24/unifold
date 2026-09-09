@@ -44,7 +44,46 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 | `unifold schemadiff A B` | Diffs two dialects' schemas (9.7 vs 10.4) — the evidence the per-version mappings are written against | yes |
 | `unifold explode FILE OUT/` | Export XML to a readable source tree | not yet |
 
-## Why there is no schema in this repo
+## The format, measured
+
+Six real exports (one 9.7, five 10.2) are published by Rocket in
+`uniface/learn-palettes`. Fetch them:
+
+```bash
+py -3 scripts/fetch_samples.py
+```
+
+They show the export is a **self-describing relational dump**, not a nested
+object model:
+
+```xml
+<UNIFACE release="9.7" xmlengine="2.0">
+<TABLE>
+  <DSC name="USOURCE" ...>            <!-- the repository table's own schema -->
+    <FLD name="UTEXT" type="B" .../>  <!-- its columns -->
+  </DSC>
+  <OCC>                               <!-- one row -->
+    <DAT name="UTEXT" xml:space="preserve">entry OccurrenceSetFieldColors ...</DAT>
+  </OCC>
+</TABLE>
+```
+
+Three findings that shaped the tool:
+
+- **ProcScript is verbatim plain text** in `DAT` elements. Not base64, not
+  compressed. Extraction is straightforward.
+- **9.7 and 10.2 share 100% of their element vocabulary.** The only structural
+  difference is a `repversion` attribute the newer root carries. One parser
+  covers both; version-specific knowledge is a table/column mapping.
+- **Real exports do not parse with a stock XML parser.** They carry a UTF-8 BOM
+  and reference a `UNIFACE.DTD` that is not shipped with them, using custom
+  entities (`&uSEP;`, `&uFRM;`, `&uALL;`) that a standard parser rejects as
+  undefined. `unifold` handles both.
+
+Full detail, including what is still unknown, in
+[docs/FORMAT-NOTES.md](docs/FORMAT-NOTES.md).
+
+## Why there is no schema hard-coded in this repo
 
 Rocket does not publish the Uniface 9.7 export schema anywhere publicly
 reachable — the documentation now sits behind a Rocket Community login, and the
@@ -54,9 +93,14 @@ parts of real components, which is the worst possible failure mode here.
 
 So `unifold` discovers the schema instead of assuming it. `probe` reads a real
 export and reports exactly what is in it; the exploder is then written against
-a mapping derived from that report. See [docs/FORMAT-NOTES.md](docs/FORMAT-NOTES.md)
-for what is actually established about the format, with sources, and what is
-still open.
+a mapping derived from that report.
+
+That decision paid for itself on first contact with real files. The measured
+format bears no resemblance to what the vendor prose suggested — "objects with
+aggregation relationships are nested" describes a nested object model, whereas
+the files are flat repository-table dumps. A hand-written parser built from the
+documentation would have been wrong in its fundamental shape. Because the format
+is self-describing, the same code reads both 9.7 and 10.2 without modification.
 
 ## Usage
 
@@ -99,11 +143,17 @@ Exit status is 0 when the two agree once ordering is normalised.
 
 ## What's needed next
 
-Phase 1 needs **real export files — ideally one from 9.7 and one from 10.4**.
-Nothing else is blocking. Any component will do; the smaller and less sensitive
-the better, and a demo or scratch component is ideal. The same component
-exported from both versions is the single most useful thing, because
-`schemadiff` can then map the two dialects onto each other directly.
+Phase 1 — `explode` — is no longer blocked. The format is measured and the
+public samples are enough to build and test against.
+
+One thing still cannot be answered from published samples: **is re-exporting an
+unchanged object byte-stable?** That needs the same component exported twice
+from a live repository, and it decides how much canonicalisation `explode` must
+do to keep git diffs readable. `compare` is built and waiting for those two
+files.
+
+A 10.4 export would also be worth having, to confirm nothing changed between
+the 10.2 measured here and 10.4.
 
 Two documented routes:
 
@@ -128,8 +178,10 @@ src/unifold/probe.py      schema discovery, content classification
 src/unifold/compare.py    export stability measurement
 src/unifold/schemadiff.py 9.7-vs-10.4 dialect comparison
 src/unifold/cli.py        command line
-docs/FORMAT-NOTES.md     what is established about the format, with sources
-tests/fixtures/          SYNTHETIC fixtures - invented, not real exports
+scripts/fetch_samples.py  downloads the real exports into samples/
+docs/FORMAT-NOTES.md      the format as measured, plus what is still unknown
+tests/test_real_exports.py regression tests against real files (skip if absent)
+tests/fixtures/           SYNTHETIC fixtures - invented, not real exports
 ```
 
 The fixtures in `tests/fixtures/` are clearly marked synthetic. They exercise
