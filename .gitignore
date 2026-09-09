@@ -3,3 +3,10 @@ tests/fixtures/real/
 __pycache__/
 *.pyc
 *.egg-info/
+
+# Exploded trees contain real component source - never commit them
+readable/
+out/
+tree/
+*.xml
+!tests/fixtures/*.xml
