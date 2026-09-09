@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
-from pathlib import Path
-
 import tempfile
+from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from . import compare as compare_mod
 from . import explode as explode_mod
@@ -250,10 +251,50 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def describe_failure(exc: Exception) -> str:
+    """Turn an expected failure into something worth reading.
+
+    A truncated export, a file that is not an export at all, or a hand-edited
+    sidecar are all things users hit. A stack trace tells them nothing they can
+    act on, so each gets a message naming the likely cause.
+    """
+    if isinstance(exc, ET.ParseError):
+        return (
+            "This file is not valid XML (%s).\n"
+            "A Uniface export can end up truncated if the export was "
+            "interrupted or the file was copied\npartially. Try re-exporting, "
+            "and run `unifold probe` on it to see how far it parses." % exc
+        )
+    if isinstance(exc, json.JSONDecodeError):
+        return (
+            "%s is corrupt (%s).\n"
+            "It is written by `unifold explode` and is not meant to be edited "
+            "by hand. Re-run explode\nto regenerate the tree."
+            % (explode_mod.SIDECAR, exc)
+        )
+    if isinstance(exc, UnicodeDecodeError):
+        return (
+            "This file could not be decoded as text (%s).\n"
+            "Uniface exports are UTF-8. A binary or compiled object -- a .frm "
+            "or .svc, say -- is not\nan export and cannot be read." % exc
+        )
+    return "%s: %s" % (type(exc).__name__, exc)
+
+
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (ET.ParseError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        print(describe_failure(exc), file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print("Could not read or write a file: %s" % exc, file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":
