@@ -68,16 +68,18 @@ class TestSafeName(unittest.TestCase):
 
 class TestSplitRules(unittest.TestCase):
     def test_multiline_becomes_a_block_scalar_stays_inline(self):
-        occ = explode_mod.Occurrence("T", "K", {
-            "SHORT": "abc",
-            "MULTI": "line one\nline two",
-            "LONG": "y" * (explode_mod.INLINE_MAX + 1),
-            "EMPTY": "   ",
-            "NONE": None,
-        })
-        properties, blocks = occ.split()
-        self.assertEqual(properties, {"SHORT": "abc"})
-        self.assertEqual(sorted(blocks), ["LONG", "MULTI"])
+        column = explode_mod.Column
+        occ = explode_mod.Occurrence("T", "K", [
+            column("SHORT", "abc"),
+            column("MULTI", "line one\nline two"),
+            column("LONG", "y" * (explode_mod.INLINE_MAX + 1)),
+            column("EMPTY", "   "),
+            column("NONE", ""),
+        ])
+        properties, blocks, empties = occ.split()
+        self.assertEqual([c.name for c in properties], ["SHORT"])
+        self.assertEqual(sorted(c.name for c in blocks), ["LONG", "MULTI"])
+        self.assertEqual(sorted(c.name for c in empties), ["EMPTY", "NONE"])
 
     def test_procscript_gets_proc_extension(self):
         self.assertEqual(explode_mod.extension_for("entry foo\nend"), ".proc")
@@ -92,9 +94,11 @@ class TestExplodeMechanics(ExplodeCase):
         self.assertEqual(result.release, "9.7")
         self.assertIn("USOURCE/MYPROC/properties.txt", result.files)
         self.assertIn("USOURCE/MYPROC/UTEXT.proc", result.files)
+        # Values are written verbatim -- no added trailing newline -- because
+        # implode has to reproduce them exactly.
         self.assertEqual(
-            (out / "USOURCE/MYPROC/UTEXT.proc").read_text(encoding="utf-8"),
-            "entry foo\n  return 0\nend\n",
+            (out / "USOURCE/MYPROC/UTEXT.proc").read_text(encoding="utf-8", newline=""),
+            "entry foo\n  return 0\nend",
         )
         self.assertIn("ULABEL: MYPROC",
                       (out / "USOURCE/MYPROC/properties.txt").read_text(encoding="utf-8"))

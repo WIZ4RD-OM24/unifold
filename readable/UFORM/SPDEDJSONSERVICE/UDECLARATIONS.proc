@@ -1,0 +1,33 @@
+variables
+  boolean         LV_FAILURE                ; There has been an error
+  public handle   LV_GSSTRINGFUNC           ; Instance of GSSTRINGFUNC
+  string          LV_SESS                  
+  string          LV_SESS_ID               
+  string          LV_SESS_MESS             
+endvariables
+#Comment ----------------------------------------------
+#Comment start_of_references
+#ifdefined TEMPLATENAME
+#info symbol TEMPLATENAME is already or also defined as a global or local constant
+#endif
+#define TEMPLATENAME=
+#Comment 
+
+#Comment end_of_references
+
+
+#Comment ----------------------------------------------
+#Comment start_of_mappings
+#Comment end_of_mappings
+
+
+#Comment ----------------------------------------------
+#Comment start_of_symbols
+#Comment end_of_symbols
+
+
+#Comment ----------------------------------------------
+
+
+
+#DEFINE LC_DEBUG = <GC_FALSE>

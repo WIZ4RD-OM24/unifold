@@ -6,8 +6,11 @@ import argparse
 import sys
 from pathlib import Path
 
+import tempfile
+
 from . import compare as compare_mod
 from . import explode as explode_mod
+from . import implode as implode_mod
 from . import probe as probe_mod
 from . import schemadiff as schemadiff_mod
 
@@ -70,6 +73,31 @@ def cmd_explode(args) -> int:
         return 2
     print(explode_mod.render(result, dry_run=args.dry_run))
     return 0
+
+
+def cmd_implode(args) -> int:
+    tree = Path(args.tree)
+    if not tree.is_dir():
+        print("no such directory: %s" % tree, file=sys.stderr)
+        return 2
+    try:
+        result = implode_mod.implode(tree, Path(args.out), force=args.force)
+    except (FileExistsError, FileNotFoundError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(implode_mod.render(result))
+    return 1 if result.warnings else 0
+
+
+def cmd_roundtrip(args) -> int:
+    path = Path(args.file)
+    if not path.is_file():
+        print("no such file: %s" % path, file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory(prefix="unifold-roundtrip-") as work:
+        result = implode_mod.roundtrip(path, Path(work))
+    print(implode_mod.render_roundtrip(result))
+    return 0 if result.ok else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +176,36 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--dry-run", action="store_true",
                    help="list the files that would be written, write nothing")
     e.set_defaults(func=cmd_explode)
+
+    i = sub.add_parser(
+        "implode",
+        help="rebuild an export file from an exploded tree",
+        description=(
+            "Reads a tree produced by `explode` and writes a Uniface export "
+            "file. It does NOT import anything -- importing the result into "
+            "your repository is a separate act you perform in the IDE. Run "
+            "`unifold roundtrip` on the original export first to confirm "
+            "unifold can reproduce it faithfully."
+        ),
+    )
+    i.add_argument("tree", help="directory produced by `unifold explode`")
+    i.add_argument("out", help="export file to write")
+    i.add_argument("--force", action="store_true", help="overwrite the output file")
+    i.set_defaults(func=cmd_implode)
+
+    r = sub.add_parser(
+        "roundtrip",
+        help="prove an export survives explode -> implode unchanged",
+        description=(
+            "Explodes an export, implodes it straight back, and compares the "
+            "two element by element with DAT values checked byte for byte. "
+            "Everything happens in a scratch directory; nothing is kept. Exit "
+            "code 0 means faithful. Run this on your own exports before "
+            "trusting implode with them."
+        ),
+    )
+    r.add_argument("file", help="path to a Uniface export file")
+    r.set_defaults(func=cmd_roundtrip)
 
     return parser
 

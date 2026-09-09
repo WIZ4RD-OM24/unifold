@@ -36,7 +36,8 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 
 **Phase 0 — shipped.** Format discovery and stability measurement.
 **Phase 1 — shipped.** `explode` turns real exports into readable source.
-**Phase 2 — next.** `implode` (write back), and semantic naming.
+**Phase 2 — shipped.** `implode` rebuilds exports; `roundtrip` proves fidelity.
+**Phase 3 — next.** Rendering `FORMPIC` as a readable layout; semantic naming.
 
 | Command | Does | Ready |
 |---|---|---|
@@ -44,6 +45,8 @@ across a 9.7 → 10.x migration, which is otherwise painful to verify.
 | `unifold compare A B` | Tells you whether two exports of an unchanged object differ genuinely, cosmetically, or only in ordering | yes |
 | `unifold schemadiff A B` | Diffs two dialects' schemas (9.7 vs 10.4) — the evidence the per-version mappings are written against | yes |
 | `unifold explode FILE OUT/` | Export XML to a readable, diffable source tree | yes |
+| `unifold implode TREE/ OUT.xml` | Rebuild an export file from an edited tree | yes |
+| `unifold roundtrip FILE` | Prove an export survives explode → implode unchanged | yes |
 
 ## The format, measured
 
@@ -162,6 +165,41 @@ Two decisions worth knowing about:
 `explode` refuses to write into a non-empty directory unless you pass
 `--force`, and `--dry-run` lists what it would write without touching disk.
 
+### Writing back
+
+Edit the `.proc` files, then rebuild an importable export:
+
+```bash
+PYTHONPATH=src py -3 -m unifold.cli implode C:/temp/tree C:/temp/changed.xml
+```
+
+**`implode` does not touch your repository.** It writes an XML file, nothing
+more. Importing it is a separate, deliberate act you perform in the Uniface IDE.
+That boundary is the entire safety story: `unifold` never has write access to
+anything of yours.
+
+Before trusting it with your own exports, prove it can reproduce them:
+
+```bash
+PYTHONPATH=src py -3 -m unifold.cli roundtrip C:/temp/exp1.xml
+```
+
+This explodes, implodes, and compares the two documents element by element,
+attribute by attribute, with `DAT` values checked byte for byte — all in a
+scratch directory that is then discarded. Exit code 0 means faithful.
+
+```
+VERDICT: faithful -- every element, attribute and value survived the round trip.
+```
+
+If it ever says otherwise, do not import that export's imploded output, and
+send me the differences it lists.
+
+Byte-identical output is not the goal and is not achievable: the original's
+line breaks and attribute wrapping are cosmetic and unrecorded. Semantic
+identity — same elements, attributes, values and order — is the goal, because
+that is what Uniface imports.
+
 Check whether exports are stable — export the same **unchanged** object twice,
 then:
 
@@ -175,7 +213,9 @@ Exit status is 0 when the two agree once ordering is normalised.
 
 ## What's needed next
 
-`explode` works on real 9.7 and 10.2 exports today, through a single code path.
+`explode`, `implode` and `roundtrip` all work on real 9.7, 10.2 and 10.4
+exports through a single code path. Every published sample round-trips
+faithfully, including a 151 KB project export spanning 45 occurrences.
 
 **Exports are byte-stable**, confirmed against a live repository: the same
 component exported twice, unchanged, produced identical bytes. Nothing is
@@ -192,6 +232,12 @@ Nothing external is blocking. `UNIFACE.DTD` turned out not to be on the critical
 path: the entity reference is the form Uniface itself writes, so preserving the
 entity name losslessly is enough to round-trip. Resolving the codepoints would
 only let the real characters be *displayed*, which is cosmetic.
+
+The one thing still untested by anyone: **whether Uniface actually imports an
+imploded file cleanly.** `roundtrip` proves the document is reproduced
+faithfully, which is necessary but not sufficient — the importer's own opinion
+has never been asked. Try it first on a throwaway component, in a repository you
+can afford to break.
 
 Two documented routes:
 
@@ -216,6 +262,7 @@ src/unifold/probe.py      schema discovery, content classification
 src/unifold/compare.py    export stability measurement
 src/unifold/schemadiff.py 9.7-vs-10.4 dialect comparison
 src/unifold/explode.py    export XML -> readable source tree
+src/unifold/implode.py    readable tree -> export XML, plus fidelity checking
 src/unifold/cli.py        command line
 scripts/fetch_samples.py  downloads the real exports into samples/
 docs/FORMAT-NOTES.md      the format as measured, plus what is still unknown

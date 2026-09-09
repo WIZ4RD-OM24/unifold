@@ -5,7 +5,8 @@ column either a scalar property or a slab of ProcScript. `explode` mirrors that
 faithfully rather than inventing a prettier model on top of it:
 
     <out>/
-      manifest.txt                 what this export contained
+      manifest.txt                 what this export contained, for humans
+      _unifold.json                what implode needs, for machines
       UFORM/
         SHOWEMPLOYEES/
           properties.txt           every scalar column, sorted
@@ -23,17 +24,27 @@ the right to assert, and a wrong name is worse than an unfamiliar one.
 when its value is multi-line or long, and a property otherwise. `UFORM` alone
 has 69 columns and the trigger set differs per table and per version, so a
 curated list would rot; measuring the value does not.
+
+Values are written verbatim -- no stripping, no added newlines -- because
+`implode` has to reproduce them exactly. The readable tree is the source of
+truth for content; `_unifold.json` carries only what the tree cannot express:
+the repository schema blocks, document order, column order, and empty columns.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .probe import PROC_RE, placeholder_for, prepare
+
+SIDECAR = "_unifold.json"
+MANIFEST = "manifest.txt"
+PROPERTIES = "properties.txt"
 
 # A value at or under this length with no newline is a property, not a file.
 INLINE_MAX = 200
@@ -50,6 +61,8 @@ RESERVED = {
     "LPT6", "LPT7", "LPT8", "LPT9",
 }
 
+XML_NS = "{http://www.w3.org/XML/1998/namespace}"
+
 
 def safe_name(value: str, fallback: str = "unnamed") -> str:
     """Make a path segment that is safe on Windows and stable across runs."""
@@ -62,62 +75,123 @@ def safe_name(value: str, fallback: str = "unnamed") -> str:
 
 
 @dataclass
+class Column:
+    name: str
+    value: str
+    attrs: dict = field(default_factory=dict)   # DAT attributes besides name
+
+
+@dataclass
 class Occurrence:
     table: str
     key: str
-    values: dict = field(default_factory=dict)
+    columns: list = field(default_factory=list)
+    # Which TABLE block this row came from. An export may repeat the same DSC
+    # name across several blocks -- the project sample does -- so the name
+    # alone cannot put a row back where it belongs.
+    table_index: int = 0
 
     def split(self):
-        """Partition columns into (properties, code blocks), dropping empties."""
-        properties: dict = {}
-        blocks: dict = {}
-        for name, value in self.values.items():
-            if value is None or not value.strip():
-                continue
-            if "\n" in value or len(value) > INLINE_MAX:
-                blocks[name] = value
+        """Partition columns into (properties, blocks, empties), order kept."""
+        properties, blocks, empties = [], [], []
+        for column in self.columns:
+            if not column.value or not column.value.strip():
+                empties.append(column)
+            elif "\n" in column.value or len(column.value) > INLINE_MAX:
+                blocks.append(column)
             else:
-                properties[name] = value.strip()
-        return properties, blocks
+                properties.append(column)
+        return properties, blocks, empties
+
+
+@dataclass
+class Table:
+    name: str
+    dsc_attrs: dict = field(default_factory=dict)
+    flds: list = field(default_factory=list)    # each FLD's attributes, in order
+
+
+@dataclass
+class Document:
+    prolog: str = ""
+    root_attrs: dict = field(default_factory=dict)
+    entities: list = field(default_factory=list)
+    tables: list = field(default_factory=list)
+    occurrences: list = field(default_factory=list)   # document order
 
 
 @dataclass
 class ExplodeResult:
     source: str
     out_dir: str
-    release: object = None
-    xmlengine: object = None
-    entities: list = field(default_factory=list)
-    tables: list = field(default_factory=list)   # (table, occurrence count)
-    files: list = field(default_factory=list)    # paths relative to out_dir
+    document: Document = field(default_factory=Document)
+    files: list = field(default_factory=list)
     skipped_empty: int = 0
 
     @property
+    def release(self):
+        return self.document.root_attrs.get("release")
+
+    @property
+    def xmlengine(self):
+        return self.document.root_attrs.get("xmlengine")
+
+    @property
+    def entities(self):
+        return self.document.entities
+
+    @property
+    def tables(self):
+        counts = {}
+        for occ in self.document.occurrences:
+            counts[occ.table_index] = counts.get(occ.table_index, 0) + 1
+        return [(t.name, counts.get(i, 0))
+                for i, t in enumerate(self.document.tables)]
+
+    @property
     def occurrence_count(self) -> int:
-        return sum(n for _, n in self.tables)
+        return len(self.document.occurrences)
 
 
-def read(path: Path):
-    """Parse an export into (root attributes, occurrences, custom entity names)."""
-    prepared, entities = prepare(path.read_bytes())
+def read(path: Path) -> Document:
+    """Parse an export into everything needed to write it back out again."""
+    raw = path.read_bytes()
+    prepared, entities = prepare(raw)
+    text = raw.decode("utf-8-sig", errors="replace")
+    at = text.find("<UNIFACE")
+    document = Document(
+        prolog=text[:at] if at > 0 else "",
+        entities=entities,
+    )
     root = ET.fromstring(prepared)
-    occurrences: list = []
-    tables: list = []
+    document.root_attrs = dict(root.attrib)
+
     for table in root.findall("TABLE"):
         dsc = table.find("DSC")
         if dsc is None:
             continue
         name = dsc.get("name") or "UNKNOWN"
-        occs = table.findall("OCC")
-        tables.append((name, len(occs)))
-        for index, occ in enumerate(occs):
+        document.tables.append(Table(
+            name=name,
+            dsc_attrs=dict(dsc.attrib),
+            flds=[dict(fld.attrib) for fld in dsc.findall("FLD")],
+        ))
+        for index, occ in enumerate(table.findall("OCC")):
+            columns = []
             values = {}
             for dat in occ.findall("DAT"):
                 col = dat.get("name")
-                if col:
-                    values[col] = dat.text or ""
-            occurrences.append(Occurrence(name, key_for(values, index), values))
-    return root.attrib, tables, occurrences, entities
+                if not col:
+                    continue
+                attrs = {k: v for k, v in dat.attrib.items() if k != "name"}
+                value = dat.text or ""
+                columns.append(Column(col, value, attrs))
+                values[col] = value
+            document.occurrences.append(
+                Occurrence(name, key_for(values, index), columns,
+                           table_index=len(document.tables) - 1)
+            )
+    return document
 
 
 def key_for(values: dict, index: int) -> str:
@@ -139,49 +213,89 @@ def explode(path: Path, out_dir: Path, force: bool = False,
             "%s is not empty. Pass --force to write into it anyway." % out_dir
         )
 
-    attrib, tables, occurrences, entities = read(path)
-    result = ExplodeResult(
-        source=str(path),
-        out_dir=str(out_dir),
-        release=attrib.get("release"),
-        xmlengine=attrib.get("xmlengine"),
-        entities=entities,
-        tables=tables,
-    )
+    document = read(path)
+    result = ExplodeResult(str(path), str(out_dir), document)
 
-    planned: list = []  # (relative path, content)
-
-    # Sort so the tree is identical for identical input, whatever order the
-    # export happened to serialise its rows in.
+    planned: list = []            # (relative path, content)
+    sidecar_occs: list = []
     seen: dict = {}
-    for occ in sorted(occurrences, key=lambda o: (o.table, o.key)):
-        # Disambiguate rows that share a key rather than silently overwriting.
+
+    # Directory names are assigned in sorted order so the tree is identical for
+    # identical input; the sidecar records true document order for implode.
+    order = sorted(
+        range(len(document.occurrences)),
+        key=lambda i: (document.occurrences[i].table, document.occurrences[i].key, i),
+    )
+    directories: dict = {}
+    for i in order:
+        occ = document.occurrences[i]
         slot = (occ.table, occ.key)
         seen[slot] = seen.get(slot, 0) + 1
-        directory = occ.key if seen[slot] == 1 else "%s__%d" % (occ.key, seen[slot])
-        base = "%s/%s" % (safe_name(occ.table), directory)
+        name = occ.key if seen[slot] == 1 else "%s__%d" % (occ.key, seen[slot])
+        directories[i] = "%s/%s" % (safe_name(occ.table), name)
 
-        properties, blocks = occ.split()
-        result.skipped_empty += len(occ.values) - len(properties) - len(blocks)
+    for i, occ in enumerate(document.occurrences):
+        base = directories[i]
+        properties, blocks, empties = occ.split()
+        result.skipped_empty += len(empties)
 
         if properties:
             body = io.StringIO()
-            for name in sorted(properties):
-                body.write("%s: %s\n" % (name, properties[name]))
-            planned.append(("%s/properties.txt" % base, body.getvalue()))
-        for name in sorted(blocks):
-            value = blocks[name]
-            filename = "%s%s" % (safe_name(name), extension_for(value))
-            planned.append(("%s/%s" % (base, filename), value.strip("\n") + "\n"))
+            for column in sorted(properties, key=lambda c: c.name):
+                body.write("%s: %s\n" % (column.name, column.value))
+            planned.append(("%s/%s" % (base, PROPERTIES), body.getvalue()))
 
-    planned.insert(0, ("manifest.txt", render_manifest(result, planned)))
+        entries = []
+        used: set = set()
+        for column in occ.columns:
+            record = {"name": column.name}
+            if column.attrs:
+                record["attrs"] = column.attrs
+            if column in empties:
+                record["store"] = "empty"
+                record["value"] = column.value
+            elif column in properties:
+                record["store"] = "inline"
+            else:
+                filename = "%s%s" % (safe_name(column.name), extension_for(column.value))
+                while filename in used:          # two columns sanitising alike
+                    filename = "_" + filename
+                used.add(filename)
+                record["store"] = "file"
+                record["file"] = filename
+                planned.append(("%s/%s" % (base, filename), column.value))
+            entries.append(record)
+
+        sidecar_occs.append({
+            "table": occ.table,
+            "table_index": occ.table_index,
+            "dir": base,
+            "columns": entries,
+        })
+
+    sidecar = {
+        "note": "Written by unifold explode. implode reads this; humans need "
+                "manifest.txt instead. Editing the .proc and properties.txt "
+                "files is expected -- editing this file is not.",
+        "prolog": document.prolog,
+        "root": document.root_attrs,
+        "entities": document.entities,
+        "tables": [
+            {"name": t.name, "dsc": t.dsc_attrs, "flds": t.flds}
+            for t in document.tables
+        ],
+        "occurrences": sidecar_occs,
+    }
+
+    planned.insert(0, (SIDECAR, json.dumps(sidecar, indent=2, ensure_ascii=False)))
+    planned.insert(0, (MANIFEST, render_manifest(result, planned)))
     result.files = [rel for rel, _ in planned]
 
     if not dry_run:
         for rel, content in planned:
             target = out_dir / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8", newline="\n")
+            target.write_text(content, encoding="utf-8", newline="")
 
     return result
 
@@ -206,11 +320,16 @@ def render_manifest(result: ExplodeResult, planned: list) -> str:
         )
         for name in result.entities:
             out.write("  &%s; -> %s\n" % (name, placeholder_for(name)))
+        out.write(
+            "implode turns these back into entity references, so the round trip\n"
+            "is exact without the real characters ever being needed.\n"
+        )
     out.write(
         "\nColumn values are split by content: multi-line or longer than %d\n"
         "characters becomes its own file, everything else is a line in\n"
-        "properties.txt. Empty columns are omitted (%d skipped).\n"
-        % (INLINE_MAX, result.skipped_empty)
+        "%s. Empty columns are omitted from the tree (%d of them) but\n"
+        "recorded in %s so implode can restore them.\n"
+        % (INLINE_MAX, PROPERTIES, result.skipped_empty, SIDECAR)
     )
     return out.getvalue()
 
