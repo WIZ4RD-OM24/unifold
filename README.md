@@ -13,8 +13,8 @@ source code. A three-line ProcScript change produces a diff nobody can review.
 `.yaml` files out, stable enough that git diffs are readable and Claude Code can
 work on the result.
 
-Target: **Uniface 9.7 and 10.4**. Read-only — `unifold` never writes to your
-repository.
+Verified against real exports from **Uniface 9.7, 10.2 and 10.4**, all through
+one code path. Read-only — `unifold` never writes to your repository.
 
 Both versions export XML rooted at `<UNIFACE>`, but Uniface 10 restructured the
 repository, so the element vocabulary and nesting differ. That is a mapping
@@ -182,13 +182,16 @@ component exported twice, unchanged, produced identical bytes. Nothing is
 stamped at export time, so no column needs excluding and git diffs stay clean.
 That was the last question blocking the design.
 
-Still worth having:
+**10.4 is confirmed identical to 10.2** in structure — same six paths, same
+repository tables, only `repversion` differs (`8` against `5`). Both `probe` and
+`explode` handled a real 10.4 export with no code change.
 
-- A genuine **10.4** export, to confirm nothing moved between the 10.2 measured
-  here and 10.4.
-- The real codepoints behind `&uSEP;` / `&uFRM;` / `&uALL;`, from a copy of
-  `UNIFACE.DTD`. `implode` needs them to round-trip safely, and they would also
-  let `FORMPIC` be rendered as a readable layout rather than delimiter soup.
+Versions verified end to end: **9.7, 10.2, 10.4**.
+
+One thing still outstanding: the real codepoints behind `&uSEP;` / `&uFRM;` /
+`&uALL;` / `&uNOT;`, from a copy of `UNIFACE.DTD`. `implode` needs them to
+round-trip safely, and they would also let `FORMPIC` be rendered as a readable
+layout rather than delimiter soup.
 
 Two documented routes:
 

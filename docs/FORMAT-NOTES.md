@@ -98,7 +98,9 @@ is the best possible news for the exploder.
 1. Every export begins with a **UTF-8 BOM**, before the XML declaration.
 2. The `DOCTYPE` references `UNIFACE.DTD`, which is **not shipped with the
    export**, and the files use custom entities defined in it — `&uSEP;`,
-   `&uFRM;`, `&uALL;`, evidently Uniface separator characters. A standard parser
+   `&uFRM;`, `&uALL;`, `&uNOT;`, evidently Uniface separator characters. The set
+   varies per file, so it is discovered per file rather than hardcoded. A
+   standard parser
    fails outright with "undefined entity". `unifold` rewrites the DOCTYPE with
    an internal subset declaring each entity as a traceable `[[name]]`
    placeholder, so files parse and nothing is silently dropped. **Their real
@@ -133,7 +135,18 @@ blob — parseable into something readable once the separators are pinned down.
 - The meaning of the packed `varinfo` attribute on `FLD` (observed values embed
   escapes such as `\1D`, `\1E`, `\1F`).
 - `FLD@type` codes: `B`, `E`, `N`, `S` observed; `B` carries ProcScript.
-- Whether 10.4 differs from the 10.2 measured here.
+**Answered: 10.4 is structurally identical to 10.2.** A real 10.4 export
+(`release="10.4"`, `repversion="8"` where 10.2 carries `5`) probes to the same
+six element paths and the same repository tables — `UFORM`, `UXGROUP`,
+`UXFIELD`. Both `probe` and `explode` handled it with no code change at all.
+The `repversion` attribute tracks the repository schema version and is the only
+observed difference between 10.2 and 10.4 at this level.
+
+Versions verified end to end so far: **9.7, 10.2, 10.4**.
+
+That export also revealed a fourth custom entity, `&uNOT;`, alongside `&uSEP;`,
+`&uFRM;` and `&uALL;` — which is a good argument for discovering entities per
+file, as `prepare()` does, rather than hardcoding the set.
 
 **Answered: exports are byte-stable.** A component exported twice from a live
 repository, unchanged in between, produced byte-identical files (`compare`
