@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE - NOT A REAL UNIFACE EXPORT.
+  Same logical content as synthetic_component.xml, but with sibling elements
+  reordered, attributes reordered, whitespace changed, and a fresh EXPORTED
+  timestamp - i.e. what an unstable re-export of an UNCHANGED object would
+  look like. Used to prove `compare` can tell cosmetic churn from real change.
+-->
+<UNIFACE EXPORTED="2026-09-09T16:48:03" VERSION="9.7.05">
+  <UFORM TYPE="FORM" NAME="PCUSTOMER" LABEL="Customer maintenance">
+    <UENTITY ORDER="2" NAME="ORDER" MODEL="APPMODEL">
+      <UFIELD KEY="N" NAME="AMOUNT" TYPE="N" LEN="12"/>
+      <UFIELD KEY="Y" NAME="ORDERNO" TYPE="N" LEN="10"/>
+    </UENTITY>
+    <ULAYOUT ENCODING="BASE64">TGF5b3V0IGJsb2IgcGxhY2Vob2xkZXIgLSBpbiBhIHJlYWwgZXhwb3J0IHRoaXMgd291bGQgYmUgdGhlIG9wYXF1ZSBmb3JtIGdlb21ldHJ5IHBheWxvYWQgdGhhdCBubyBodW1hbiBjYW4gcmVhZC4=</ULAYOUT>
+    <UPROC TRIGGER="QUIT"><![CDATA[
+trigger quit
+  askmess "Discard unsaved changes?"
+  if ($status = 0)
+    return 1
+  endif
+endtrigger
+]]></UPROC>
+    <UENTITY MODEL="APPMODEL" ORDER="1" NAME="CUSTOMER">
+      <UPROC TRIGGER="VALIDATE"><![CDATA[
+trigger validate
+  if (NAME = "")
+    message "Name is required"
+    return -1
+  endif
+endtrigger
+]]></UPROC>
+      <UFIELD NAME="CITY" LEN="40" TYPE="C" KEY="N"/>
+      <UFIELD NAME="CUSTNO" LEN="8" TYPE="N" KEY="Y"/>
+      <UFIELD NAME="NAME" LEN="60" TYPE="C" KEY="N"/>
+    </UENTITY>
+    <UPROC TRIGGER="EXEC"><![CDATA[
+trigger exec
+  variables
+    string vName
+  endvariables
+  activate "SRV_CUSTOMER".INIT()
+  if ($status < 0)
+    message "Could not initialise customer service"
+    return -1
+  endif
+  retrieve/e
+endtrigger
+]]></UPROC>
+  </UFORM>
+</UNIFACE>

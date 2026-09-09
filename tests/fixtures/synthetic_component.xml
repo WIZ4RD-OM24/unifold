@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE - NOT A REAL UNIFACE EXPORT.
+  Invented purely to exercise the probe and compare code paths (nesting,
+  attributes, CDATA ProcScript, a base64 blob, repeated siblings). The element
+  names here are placeholders and must NOT be treated as the real 9.7 schema.
+  Replace with a genuine export before writing any mapping.
+-->
+<UNIFACE VERSION="9.7.05" EXPORTED="2026-09-09T11:02:14">
+  <UFORM NAME="PCUSTOMER" LABEL="Customer maintenance" TYPE="FORM">
+    <UPROC TRIGGER="EXEC"><![CDATA[
+trigger exec
+  variables
+    string vName
+  endvariables
+  activate "SRV_CUSTOMER".INIT()
+  if ($status < 0)
+    message "Could not initialise customer service"
+    return -1
+  endif
+  retrieve/e
+endtrigger
+]]></UPROC>
+    <UPROC TRIGGER="QUIT"><![CDATA[
+trigger quit
+  askmess "Discard unsaved changes?"
+  if ($status = 0)
+    return 1
+  endif
+endtrigger
+]]></UPROC>
+    <UENTITY NAME="CUSTOMER" MODEL="APPMODEL" ORDER="1">
+      <UFIELD NAME="CUSTNO" TYPE="N" LEN="8" KEY="Y"/>
+      <UFIELD NAME="NAME" TYPE="C" LEN="60" KEY="N"/>
+      <UFIELD NAME="CITY" TYPE="C" LEN="40" KEY="N"/>
+      <UPROC TRIGGER="VALIDATE"><![CDATA[
+trigger validate
+  if (NAME = "")
+    message "Name is required"
+    return -1
+  endif
+endtrigger
+]]></UPROC>
+    </UENTITY>
+    <UENTITY NAME="ORDER" MODEL="APPMODEL" ORDER="2">
+      <UFIELD NAME="ORDERNO" TYPE="N" LEN="10" KEY="Y"/>
+      <UFIELD NAME="AMOUNT" TYPE="N" LEN="12" KEY="N"/>
+    </UENTITY>
+    <ULAYOUT ENCODING="BASE64">TGF5b3V0IGJsb2IgcGxhY2Vob2xkZXIgLSBpbiBhIHJlYWwgZXhwb3J0IHRoaXMgd291bGQgYmUgdGhlIG9wYXF1ZSBmb3JtIGdlb21ldHJ5IHBheWxvYWQgdGhhdCBubyBodW1hbiBjYW4gcmVhZC4=</ULAYOUT>
+  </UFORM>
+</UNIFACE>
