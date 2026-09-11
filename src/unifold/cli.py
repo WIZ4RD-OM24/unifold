@@ -15,8 +15,7 @@ from . import implode as implode_mod
 from . import probe as probe_mod
 from . import schemadiff as schemadiff_mod
 from . import xref as xref_mod
-
-__version__ = "0.1.0"
+from . import __version__
 
 
 def cmd_probe(args) -> int:

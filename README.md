@@ -1,5 +1,7 @@
 # unifold
 
+[![tests](https://github.com/WIZ4RD-OM24/unifold/actions/workflows/tests.yml/badge.svg)](https://github.com/WIZ4RD-OM24/unifold/actions/workflows/tests.yml)
+
 **Work on your Uniface codebase with the tools everyone else already uses.**
 
 Uniface stores components, ProcScript and entity models as rows in a repository
@@ -359,3 +361,9 @@ Fixtures under `tests/fixtures/` are **synthetic** — invented to exercise code
 paths. They are not evidence about the real format and should not be read as
 such. [docs/FORMAT-NOTES.md](docs/FORMAT-NOTES.md) records what has actually
 been measured, with sources, along with the open questions.
+
+Tests run automatically on Windows and Linux against Python 3.9 and 3.13.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
