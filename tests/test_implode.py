@@ -134,6 +134,21 @@ class TestImplodeMechanics(TempCase):
         self.assertTrue(result.warnings)
         self.assertIn("UTEXT", result.warnings[0])
 
+    def test_properties_edited_with_windows_line_endings_stay_clean(self):
+        # Editing properties.txt in a Windows editor rewrites it with CRLF. The
+        # carriage return is structure, not content, and must not end up inside
+        # a value and get written back into the export.
+        tree, out = self.tmp / "tree", self.tmp / "out.xml"
+        explode_mod.explode(self.source(), tree)
+        properties = tree / "USOURCE/MYPROC/properties.txt"
+        properties.write_text(
+            properties.read_text(encoding="utf-8", newline="").replace("\n", "\r\n"),
+            encoding="utf-8", newline="",
+        )
+        implode_mod.implode(tree, out, force=True)
+        self.assertIn(b"<DAT name=\"ULABEL\">MYPROC</DAT>", out.read_bytes())
+        self.assertNotIn(b"MYPROC\r", out.read_bytes())
+
     def test_edits_to_the_tree_reach_the_output(self):
         # The entire point: change a .proc file, get a changed export.
         tree, out = self.tmp / "tree", self.tmp / "out.xml"

@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from .explode import MANIFEST, SIDECAR, XML_NS, explode
+from .explode import MANIFEST, SIDECAR, XML_NS, explode, read_properties
 from .probe import prepare
 
 DEFAULT_PROLOG = (
@@ -89,22 +89,6 @@ def load_sidecar(tree_dir: Path) -> dict:
             "without it." % (tree_dir, SIDECAR)
         )
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def read_properties(path: Path) -> dict:
-    """Parse properties.txt back into {column: value}, preserving the value."""
-    values: dict = {}
-    if not path.is_file():
-        return values
-    for line in path.read_text(encoding="utf-8").split("\n"):
-        if not line:
-            continue
-        head, sep, tail = line.partition(":")
-        if not sep:
-            continue
-        # explode writes "NAME: value"; drop exactly the one separating space.
-        values[head] = tail[1:] if tail.startswith(" ") else tail
-    return values
 
 
 def build(tree_dir: Path) -> tuple:

@@ -195,6 +195,36 @@ def render_symbol(index: Index, name: str) -> str:
     return out.getvalue()
 
 
+def render_component(index: Index, name: str) -> str:
+    """What one object defines and what it calls out to."""
+    wanted = name.lower()
+    definitions = [d for d in index.definitions
+                   if d.site.object_name.lower() == wanted]
+    references = [r for r in index.references
+                  if r.site.object_name.lower() == wanted]
+
+    out = io.StringIO()
+    out.write("\nCode in %s\n" % name)
+    if not definitions and not references:
+        out.write("  No ProcScript found for that name in this workspace.\n")
+        return out.getvalue()
+
+    plural = {"entry": "entries", "operation": "operations", "trigger": "triggers"}
+    by_kind = defaultdict(set)
+    for d in definitions:
+        by_kind[d.kind].add(d.name)
+    out.write("  defines: %s\n" % (", ".join(
+        "%d %s" % (len(v), k if len(v) == 1 else plural.get(k, k + "s"))
+        for k, v in sorted(by_kind.items())
+    ) or "nothing"))
+
+    outgoing = sorted({(r.service, r.name) for r in references})
+    out.write("  calls out to %d distinct target(s)\n" % len(outgoing))
+    for service, target in outgoing:
+        out.write("    %s%s\n" % (('"%s".' % service) if service else "", target))
+    return out.getvalue()
+
+
 def render(index: Index, show_unresolved: bool = True,
            show_uncalled: bool = True) -> str:
     out = io.StringIO()

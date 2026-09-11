@@ -14,6 +14,7 @@ from . import explode as explode_mod
 from . import implode as implode_mod
 from . import probe as probe_mod
 from . import schemadiff as schemadiff_mod
+from . import usage as usage_mod
 from . import xref as xref_mod
 from . import __version__
 
@@ -106,6 +107,23 @@ def cmd_xref(args) -> int:
     if not root.is_dir():
         print("no such directory: %s" % root, file=sys.stderr)
         return 2
+    # Data questions -- which components use this entity or field -- are
+    # answered from the exploded properties, not from ProcScript.
+    if args.entity or args.field or args.component or args.data:
+        data = usage_mod.build(root)
+        if args.json:
+            print(usage_mod.to_json(data))
+        elif args.entity:
+            print(usage_mod.render_lookup(data, args.entity, "entity"))
+        elif args.field:
+            print(usage_mod.render_lookup(data, args.field, "field"))
+        elif args.component:
+            print(usage_mod.render_component(data, args.component))
+            print(xref_mod.render_component(xref_mod.build(root), args.component))
+        else:
+            print(usage_mod.render(data))
+        return 0
+
     index = xref_mod.build(root)
     if args.json:
         print(xref_mod.to_json(index))
@@ -239,7 +257,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     x.add_argument("workspace", help="directory containing exploded tree(s)")
     x.add_argument("--symbol", metavar="NAME",
-                   help="show where one name is defined and called")
+                   help="show where one ProcScript name is defined and called")
+    x.add_argument("--entity", metavar="NAME",
+                   help="show which components use an entity")
+    x.add_argument("--field", metavar="NAME",
+                   help="show which components use a field")
+    x.add_argument("--component", metavar="NAME",
+                   help="show what one component uses and calls")
+    x.add_argument("--data", action="store_true",
+                   help="summarise entity and field usage instead of code")
     x.add_argument("--unresolved", action="store_true",
                    help="only what is called but not defined here")
     x.add_argument("--uncalled", action="store_true",

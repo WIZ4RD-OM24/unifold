@@ -10,3 +10,7 @@ out/
 tree/
 *.xml
 !tests/fixtures/*.xml
+build/
+dist/
+.venv/
+venv/

@@ -105,7 +105,7 @@ assistant at it.
 | `unifold explode FILE OUT/` | Convert an export into a readable source tree |
 | `unifold implode TREE/ OUT.xml` | Rebuild an importable export from an edited tree |
 | `unifold roundtrip FILE` | Verify an export survives explode → implode unchanged |
-| `unifold xref WORKSPACE/` | Trace calls and dependencies across components |
+| `unifold xref WORKSPACE/` | Trace calls, entities and fields across components |
 | `unifold probe FILE` | Report an export's structure, when something looks wrong |
 | `unifold compare A B` | Determine whether two exports genuinely differ |
 | `unifold schemadiff A B` | Compare the schemas of two exports |
@@ -196,6 +196,41 @@ Triggers and operations are excluded from the dead-code list by design: the
 runtime fires triggers and other components activate operations, so silence
 inside a workspace proves nothing about them. Even an uncalled entry may be
 reached from something you have not exported — confirm before deleting.
+
+**Impact analysis.** The same command answers the data questions — what breaks
+if I change this — without parsing any ProcScript, because the repository
+already records the relationships:
+
+```bash
+unifold xref workspace/ --entity EMPLOYEE
+```
+
+```
+Defined in 1 place(s)
+  BOOTSTRAP.EMPLOYEE                 bootstrap_model/UCGROUP/EMPLOYEE/properties.txt
+
+Used by 5 component(s)
+  BOOTSTRAPDSP_1               cpt_bootstrapdsp/UXGROUP/EMPLOYEE/properties.txt
+  EMPFORM                      prj_full_demoproject/UXGROUP/EMPLOYEE/properties.txt
+  EMPLIST                      prj_full_demoproject/UXGROUP/EMPLOYEE__2/properties.txt
+  EMPRESTFUL                   prj_full_demoproject/UXGROUP/EMPLOYEE__3/properties.txt
+  SHOWEMPLOYEES                cpt_showemployees/UXGROUP/EMPLOYEE/properties.txt
+```
+
+| Flag | Answers |
+|---|---|
+| `--entity NAME` | Which components use this entity |
+| `--field NAME` | Which components use this field, and its declared type |
+| `--component NAME` | What one component uses and calls |
+| `--data` | Workspace summary: shared entities, undefined usages, unused definitions |
+
+Entities are keyed `MODEL.ENTITY` and fields `MODEL.ENTITY.FIELD`, so two models
+defining the same entity name stay distinct. Both bare and qualified names are
+accepted.
+
+The `--data` summary highlights **entities used by more than one component** —
+the blast radius of a change — alongside usages whose model you haven't exported
+and definitions nothing uses.
 
 ### probe, compare, schemadiff
 
@@ -338,6 +373,7 @@ exporting.
 src/unifold/explode.py    export XML -> readable source tree
 src/unifold/implode.py    readable tree -> export XML, plus fidelity checking
 src/unifold/xref.py       cross-component call graph
+src/unifold/usage.py      entity and field usage across components
 src/unifold/packed.py     decoding packed lists and form layouts
 src/unifold/probe.py      structure discovery and content classification
 src/unifold/compare.py    export stability measurement

@@ -196,6 +196,30 @@ def read(path: Path) -> Document:
     return document
 
 
+def read_properties(path: Path) -> dict:
+    """Parse a properties.txt back into {column: value}, preserving the value.
+
+    Lives here, beside the writer, so the two halves of the format cannot drift
+    apart. Both `implode` and `usage` read through this.
+    """
+    values: dict = {}
+    if not path.is_file():
+        return values
+    for line in path.read_text(encoding="utf-8", newline="").split("\n"):
+        # A Windows editor will rewrite this file with CRLF endings. The line
+        # ending is structure, not content, so the carriage return must not
+        # survive into the value -- it would be written back into the export.
+        line = line.rstrip("\r")
+        if not line:
+            continue
+        head, sep, tail = line.partition(":")
+        if not sep:
+            continue
+        # explode writes "NAME: value"; drop exactly the one separating space.
+        values[head] = tail[1:] if tail.startswith(" ") else tail
+    return values
+
+
 def key_for(values: dict, index: int) -> str:
     for column in KEY_COLUMNS:
         candidate = (values.get(column) or "").strip()
