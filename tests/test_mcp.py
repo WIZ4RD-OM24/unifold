@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from unifold import explode as explode_mod  # noqa: E402
 from unifold import mcp  # noqa: E402
 
 SAMPLES = ROOT / "samples" / "learn-palettes"
@@ -130,10 +131,8 @@ class TestReadOnly(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         directory = tmp / "e" / "UFORM" / "COMPA"
         directory.mkdir(parents=True)
-        (directory / "properties.txt").write_text("ULABEL: COMPA\n",
-                                                  encoding="utf-8", newline="")
-        (directory / "USCRIPT.proc").write_text("entry a\nend\n",
-                                                encoding="utf-8", newline="")
+        explode_mod.write_text(directory / "properties.txt", "ULABEL: COMPA\n")
+        explode_mod.write_text(directory / "USCRIPT.proc", "entry a\nend\n")
 
         def snapshot():
             return {p.relative_to(tmp).as_posix(): p.read_bytes()

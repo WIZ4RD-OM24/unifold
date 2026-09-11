@@ -196,6 +196,24 @@ def read(path: Path) -> Document:
     return document
 
 
+def write_text(path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Write without newline translation.
+
+    `newline=""` is load-bearing: without it Windows rewrites every "\\n" as
+    "\\r\\n", which would change the bytes `implode` reads back and break
+    fidelity. `Path.write_text` only grew a `newline` argument in Python 3.10,
+    so go through `Path.open`, which has always had one.
+    """
+    with path.open("w", encoding=encoding, newline="") as handle:
+        handle.write(content)
+
+
+def read_text(path: Path, encoding: str = "utf-8", errors: str = "strict") -> str:
+    """Read verbatim, with no newline translation. See `write_text`."""
+    with path.open("r", encoding=encoding, errors=errors, newline="") as handle:
+        return handle.read()
+
+
 def read_properties(path: Path) -> dict:
     """Parse a properties.txt back into {column: value}, preserving the value.
 
@@ -205,7 +223,7 @@ def read_properties(path: Path) -> dict:
     values: dict = {}
     if not path.is_file():
         return values
-    for line in path.read_text(encoding="utf-8", newline="").split("\n"):
+    for line in read_text(path).split("\n"):
         # A Windows editor will rewrite this file with CRLF endings. The line
         # ending is structure, not content, so the carriage return must not
         # survive into the value -- it would be written back into the export.
@@ -325,7 +343,7 @@ def explode(path: Path, out_dir: Path, force: bool = False,
         for rel, content in planned:
             target = out_dir / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8", newline="")
+            write_text(target, content)
 
     return result
 

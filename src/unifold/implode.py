@@ -27,7 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from .explode import MANIFEST, SIDECAR, XML_NS, explode, read_properties
+from .explode import (MANIFEST, SIDECAR, XML_NS, explode,
+                      read_properties, read_text)
 from .probe import prepare
 
 DEFAULT_PROLOG = (
@@ -165,7 +166,7 @@ def build(tree_dir: Path) -> tuple:
                     target = contained(tree_dir, occ.get("dir"),
                                        column.get("file"))
                     if target.is_file():
-                        value = target.read_text(encoding="utf-8", newline="")
+                        value = read_text(target)
                     else:
                         warnings.append(
                             "%s: file %s missing; wrote column %s empty"

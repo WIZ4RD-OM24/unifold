@@ -447,7 +447,10 @@ paths. They are not evidence about the real format and should not be read as
 such. [docs/FORMAT-NOTES.md](docs/FORMAT-NOTES.md) records what has actually
 been measured, with sources, along with the open questions.
 
-Tests run automatically on Windows and Linux against Python 3.9 and 3.13.
+Tests run automatically on Windows and Linux against Python 3.9 and 3.13. The
+declared Python floor is enforced by `tests/test_compat.py`, which parses every
+source file at that version and rejects stdlib arguments that did not exist
+yet -- so a 3.10-only API cannot pass locally and fail in CI.
 
 ## Licence
 

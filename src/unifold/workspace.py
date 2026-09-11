@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import usage as usage_mod
 from . import xref as xref_mod
-from .explode import PROPERTIES, read_properties
+from .explode import PROPERTIES, read_properties, read_text, write_text
 
 INDEX = "INDEX.md"
 
@@ -65,7 +65,7 @@ def scan(root: Path) -> list:
         export = "/".join(parts[:-2]) or "(root)"
         code = []
         for path in sorted(directory.glob("*.proc")):
-            text = path.read_text(encoding="utf-8", errors="replace", newline="")
+            text = read_text(path, errors="replace")
             code.append((path.name, text.count("\n") + 1 if text else 0))
         objects.append(Obj(
             export=export,
@@ -169,5 +169,5 @@ def render(root: Path) -> str:
 def write(root: Path, out_file: Path = None) -> Path:
     target = out_file or (root / INDEX)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(render(root), encoding="utf-8", newline="")
+    write_text(target, render(root))
     return target

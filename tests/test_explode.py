@@ -97,7 +97,7 @@ class TestExplodeMechanics(ExplodeCase):
         # Values are written verbatim -- no added trailing newline -- because
         # implode has to reproduce them exactly.
         self.assertEqual(
-            (out / "USOURCE/MYPROC/UTEXT.proc").read_text(encoding="utf-8", newline=""),
+            explode_mod.read_text(out / "USOURCE/MYPROC/UTEXT.proc"),
             "entry foo\n  return 0\nend",
         )
         self.assertIn("ULABEL: MYPROC",

@@ -141,9 +141,8 @@ class TestImplodeMechanics(TempCase):
         tree, out = self.tmp / "tree", self.tmp / "out.xml"
         explode_mod.explode(self.source(), tree)
         properties = tree / "USOURCE/MYPROC/properties.txt"
-        properties.write_text(
-            properties.read_text(encoding="utf-8", newline="").replace("\n", "\r\n"),
-            encoding="utf-8", newline="",
+        explode_mod.write_text(
+            properties, explode_mod.read_text(properties).replace("\n", "\r\n")
         )
         implode_mod.implode(tree, out, force=True)
         self.assertIn(b"<DAT name=\"ULABEL\">MYPROC</DAT>", out.read_bytes())
@@ -153,9 +152,8 @@ class TestImplodeMechanics(TempCase):
         # The entire point: change a .proc file, get a changed export.
         tree, out = self.tmp / "tree", self.tmp / "out.xml"
         explode_mod.explode(self.source(), tree)
-        (tree / "USOURCE/MYPROC/UTEXT.proc").write_text(
-            "entry foo\n  return 42\nend", encoding="utf-8", newline=""
-        )
+        explode_mod.write_text(tree / "USOURCE/MYPROC/UTEXT.proc",
+                               "entry foo\n  return 42\nend")
         implode_mod.implode(tree, out)
         self.assertIn(b"return 42", out.read_bytes())
 

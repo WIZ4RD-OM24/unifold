@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from unifold import explode as explode_mod  # noqa: E402
 from unifold import workspace  # noqa: E402
 
 SAMPLES = ROOT / "samples" / "learn-palettes"
@@ -31,13 +32,13 @@ class WorkspaceCase(unittest.TestCase):
     def object_dir(self, relative: str, properties=None, code=None):
         directory = self.tmp / relative
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / "properties.txt").write_text(
+        explode_mod.write_text(
+            directory / "properties.txt",
             "".join("%s: %s\n" % (k, v)
                     for k, v in sorted((properties or {}).items())),
-            encoding="utf-8", newline="",
         )
         for name, text in (code or {}).items():
-            (directory / name).write_text(text, encoding="utf-8", newline="")
+            explode_mod.write_text(directory / name, text)
 
     def small_workspace(self):
         self.object_dir(
