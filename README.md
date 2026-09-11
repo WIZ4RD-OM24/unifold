@@ -379,6 +379,12 @@ so you can type `[[uSEP]]` when writing new code and it will import correctly.
 - **Missing input is reported, not ignored.** If `implode` cannot find a file it
   expects, it warns and exits non-zero rather than quietly writing an empty
   value.
+- **Untrusted input is handled as such.** Export files and exploded trees both
+  arrive from elsewhere, so XML entity attacks are neutralised and paths are
+  confined to the tree they belong to.
+- **No network access, no telemetry, no subprocesses, no dependencies.**
+
+See [SECURITY.md](SECURITY.md) for the trust boundaries and what is tested.
 
 ---
 

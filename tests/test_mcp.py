@@ -181,10 +181,51 @@ class TestAgainstRealExports(unittest.TestCase):
         text = self.call("workspace_summary", workspace=str(self.tmp))
         self.assertIn("Workspace index", text)
 
-    def test_probe_export_reads_a_raw_file(self):
-        text = self.call("probe_export",
-                         file=str(SAMPLES / "cpt_showemployees.xml"))
+    def test_probe_export_reads_a_file_inside_the_workspace(self):
+        shutil.copy(SAMPLES / "cpt_showemployees.xml", self.tmp / "export.xml")
+        text = self.call("probe_export", workspace=str(self.tmp),
+                         file="export.xml")
         self.assertIn("UNIFACE", text)
+
+
+class TestPathConfinement(unittest.TestCase):
+    """The MCP surface must not become an arbitrary-file reader.
+
+    `probe` prints the opening bytes of anything that is not XML -- a fair
+    diagnostic for someone running the CLI on their own files, and a file-read
+    primitive if a client can name any path on the machine.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="unifold-confine-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.secret = self.tmp / "secret.txt"
+        self.secret.write_text("SECRET-CANARY", encoding="utf-8")
+        self.workspace = self.tmp / "ws"
+        self.workspace.mkdir()
+
+    def probe(self, path):
+        (response,) = converse(request(
+            1, "tools/call",
+            name="probe_export",
+            arguments={"workspace": str(self.workspace), "file": str(path)},
+        ))
+        return response["result"]
+
+    def test_absolute_path_outside_the_workspace_is_refused(self):
+        result = self.probe(self.secret)
+        self.assertTrue(result["isError"])
+        self.assertNotIn("SECRET-CANARY", result["content"][0]["text"])
+
+    def test_relative_traversal_is_refused(self):
+        result = self.probe("../secret.txt")
+        self.assertTrue(result["isError"])
+        self.assertNotIn("SECRET-CANARY", result["content"][0]["text"])
+
+    def test_a_file_inside_the_workspace_is_allowed(self):
+        inside = self.workspace / "inside.txt"
+        inside.write_text("harmless", encoding="utf-8")
+        self.assertFalse(self.probe("inside.txt")["isError"])
 
 
 if __name__ == "__main__":

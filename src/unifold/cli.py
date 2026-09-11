@@ -360,6 +360,9 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
+    except implode_mod.UnsafePath as exc:
+        print("Refused for safety: %s" % exc, file=sys.stderr)
+        return 3
     except (ET.ParseError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         print(describe_failure(exc), file=sys.stderr)
         return 2

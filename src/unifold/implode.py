@@ -80,6 +80,35 @@ class ImplodeResult:
     warnings: list = field(default_factory=list)
 
 
+class UnsafePath(ValueError):
+    """A sidecar asked for a file outside the tree it belongs to."""
+
+
+def contained(root: Path, *parts, source: str = SIDECAR) -> Path:
+    """Resolve a sidecar-supplied path under `root`, refusing any escape.
+
+    Exploded trees get shared -- committed to git, sent for review, copied off a
+    network drive -- so `_unifold.json` is untrusted input even though `explode`
+    normally writes it. Without this check a hand-edited sidecar could point at
+    `../../../.ssh/id_rsa` and `implode` would quietly read it into the export.
+    """
+    root_resolved = root.resolve()
+    target = root_resolved
+    for part in parts:
+        target = target / (part or "")
+    target = target.resolve()
+    try:
+        target.relative_to(root_resolved)
+    except ValueError:
+        raise UnsafePath(                       # noqa: B904 -- chain is noise
+            "%s refers to %s, which is outside %s. Refusing to read it.\n"
+            "Input from an untrusted source can use this to pull private files "
+            "into\nsomewhere they do not belong."
+            % (source, "/".join(str(p) for p in parts if p), root)
+        ) from None
+    return target
+
+
 def load_sidecar(tree_dir: Path) -> dict:
     path = tree_dir / SIDECAR
     if not path.is_file():
@@ -116,8 +145,9 @@ def build(tree_dir: Path) -> tuple:
         out.write("</DSC>\n")
 
         for occ in by_table.get(table_index, []):
-            base = tree_dir / occ["dir"]
-            properties = read_properties(base / "properties.txt")
+            base = contained(tree_dir, occ.get("dir"))
+            properties = read_properties(contained(tree_dir, occ.get("dir"),
+                                                   "properties.txt"))
             out.write("<OCC>\n")
             for column in occ.get("columns", []):
                 name = column["name"]
@@ -132,7 +162,8 @@ def build(tree_dir: Path) -> tuple:
                         )
                     value = properties.get(name, "")
                 else:
-                    target = base / column.get("file", "")
+                    target = contained(tree_dir, occ.get("dir"),
+                                       column.get("file"))
                     if target.is_file():
                         value = target.read_text(encoding="utf-8", newline="")
                     else:

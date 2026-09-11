@@ -160,6 +160,68 @@ class TestImplodeMechanics(TempCase):
         self.assertIn(b"return 42", out.read_bytes())
 
 
+class TestPoisonedSidecar(TempCase):
+    """An exploded tree is shared -- via git, review, a network drive -- so the
+    sidecar is untrusted input even though explode normally writes it."""
+
+    def setUp(self):
+        super().setUp()
+        self.secret = self.tmp / "secret.txt"
+        self.secret.write_text("SECRET-CANARY", encoding="utf-8")
+        self.tree = self.tmp / "tree"
+        explode_mod.explode(self.source(), self.tree)
+
+    def poison(self, **changes):
+        import json
+        path = self.tree / explode_mod.SIDECAR
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for occ in data["occurrences"]:
+            if "dir" in changes:
+                occ["dir"] = changes["dir"]
+            for column in occ["columns"]:
+                if "file" in changes and column.get("store") == "file":
+                    column["store"] = "file"
+                    column["file"] = changes["file"]
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_traversal_in_a_file_reference_is_refused(self):
+        self.poison(file="../../../secret.txt")
+        with self.assertRaises(implode_mod.UnsafePath):
+            implode_mod.implode(self.tree, self.tmp / "out.xml")
+
+    def test_absolute_path_in_a_file_reference_is_refused(self):
+        self.poison(file=str(self.secret))
+        with self.assertRaises(implode_mod.UnsafePath):
+            implode_mod.implode(self.tree, self.tmp / "out.xml")
+
+    def test_traversal_in_a_directory_reference_is_refused(self):
+        self.poison(dir="../..")
+        with self.assertRaises(implode_mod.UnsafePath):
+            implode_mod.implode(self.tree, self.tmp / "out.xml")
+
+    def test_nothing_is_written_when_a_path_is_refused(self):
+        self.poison(file="../../../secret.txt")
+        target = self.tmp / "out.xml"
+        with self.assertRaises(implode_mod.UnsafePath):
+            implode_mod.implode(self.tree, target)
+        self.assertFalse(target.exists())
+
+    def test_the_secret_never_reaches_the_output(self):
+        self.poison(file="../../../secret.txt")
+        try:
+            implode_mod.implode(self.tree, self.tmp / "out.xml")
+        except implode_mod.UnsafePath:
+            pass
+        for path in self.tmp.rglob("*.xml"):
+            self.assertNotIn("SECRET-CANARY",
+                             path.read_text(encoding="utf-8", errors="replace"))
+
+    def test_an_honest_tree_still_works(self):
+        # The check must not break the normal path.
+        result = implode_mod.implode(self.tree, self.tmp / "fine.xml")
+        self.assertEqual(result.warnings, [])
+
+
 class TestVerify(TempCase):
     def test_identical_documents_report_no_problems(self):
         raw = self.source().read_bytes()

@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 from . import probe as probe_mod
+from .implode import contained
 from . import usage as usage_mod
 from . import workspace as workspace_mod
 from . import xref as xref_mod
@@ -97,21 +98,17 @@ def tool_definitions() -> list:
             "entries nothing calls. Shows what the code depends on but has not "
             "exported, and dead-code candidates.",
         ),
-        {
-            "name": "probe_export",
-            "description":
-                "Report the structure of a raw Uniface export file: its "
-                "element tree, repository tables, columns and where ProcScript "
-                "lives. Use when an export will not explode or looks wrong.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "file": {"type": "string",
-                             "description": "Path to a Uniface export XML file."}
-                },
-                "required": ["file"],
-            },
-        },
+        spec(
+            "probe_export",
+            "Report the structure of a raw Uniface export file: its element "
+            "tree, repository tables, columns and where ProcScript lives. Use "
+            "when an export will not explode or looks wrong. The file must sit "
+            "inside the given workspace.",
+            {"file": {"type": "string",
+                      "description": "Path to a Uniface export XML file, "
+                                     "inside the workspace."}},
+            required=("workspace", "file"),
+        ),
     ]
 
 
@@ -135,16 +132,20 @@ def require_name(arguments: dict) -> str:
 def call_tool(name: str, arguments: dict) -> str:
     arguments = arguments or {}
 
+    root = require_workspace(arguments)
+
     if name == "probe_export":
         raw = arguments.get("file")
         if not raw:
             raise ValueError("A 'file' path is required.")
-        path = Path(raw)
+        # Confined to the workspace on purpose. probe reports the opening bytes
+        # of anything that is not XML, which is a useful diagnostic for someone
+        # running the CLI on their own files and an arbitrary-file read if an
+        # assistant can name any path. The MCP surface stays narrow.
+        path = contained(root, raw, source="The requested file")
         if not path.is_file():
-            raise ValueError("No such file: %s" % path)
+            raise ValueError("No such file in the workspace: %s" % raw)
         return probe_mod.render(probe_mod.probe(path), show_samples=False)
-
-    root = require_workspace(arguments)
 
     if name == "workspace_summary":
         return workspace_mod.render(root)
