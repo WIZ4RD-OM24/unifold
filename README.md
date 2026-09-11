@@ -36,7 +36,8 @@ components, which is precisely where the IDE has no answer.
 
 **AI assistance.** Point Claude Code, Copilot or any assistant at the exploded
 tree and it can read, explain and modify your Uniface code like any other
-project. This is the capability the platform otherwise has no route to.
+project. A built-in, read-only MCP server lets an assistant query the codebase
+directly. This is the capability the platform otherwise has no route to.
 
 **Readable form layouts and properties.** Packed values that display as
 delimiter soup are decoded into structured key/value listings and a visual
@@ -106,6 +107,8 @@ assistant at it.
 | `unifold implode TREE/ OUT.xml` | Rebuild an importable export from an edited tree |
 | `unifold roundtrip FILE` | Verify an export survives explode → implode unchanged |
 | `unifold xref WORKSPACE/` | Trace calls, entities and fields across components |
+| `unifold index WORKSPACE/` | Write a navigable Markdown overview of a codebase |
+| `unifold mcp` | Serve a workspace to an AI assistant, read-only |
 | `unifold probe FILE` | Report an export's structure, when something looks wrong |
 | `unifold compare A B` | Determine whether two exports genuinely differ |
 | `unifold schemadiff A B` | Compare the schemas of two exports |
@@ -231,6 +234,44 @@ accepted.
 The `--data` summary highlights **entities used by more than one component** —
 the blast radius of a change — alongside usages whose model you haven't exported
 and definitions nothing uses.
+
+### index
+
+```bash
+unifold index workspace/ [--out FILE] [--stdout]
+```
+
+Writes `INDEX.md`: every component and library proc with its code files and line
+counts, the data model in use and who uses it, and external dependencies — with
+relative links that work in an editor, on GitHub and in a pull request. It is
+the way into a codebase you don't know yet.
+
+A derived view; regenerate it after re-exploding rather than editing it.
+
+### mcp
+
+```bash
+unifold mcp
+```
+
+Runs a Model Context Protocol server over stdio, so an AI assistant can query
+your workspace directly rather than depending on you to run commands and paste
+output. Register it with any MCP client — for Claude Code:
+
+```bash
+claude mcp add unifold -- unifold mcp
+```
+
+Then ask questions in plain language: *who calls this library proc*, *which
+components use this entity*, *what does this component touch*.
+
+The tools offered are `workspace_summary`, `find_symbol`, `find_entity`,
+`find_field`, `describe_component`, `unresolved_calls` and `probe_export`.
+
+**The server is read-only by construction.** Every tool answers a question; none
+writes a file, rebuilds an export or touches a repository. An assistant can
+explore a Uniface codebase freely with no possibility of changing it — and the
+way that is guaranteed is by not offering the capability at all.
 
 ### probe, compare, schemadiff
 
@@ -374,6 +415,8 @@ src/unifold/explode.py    export XML -> readable source tree
 src/unifold/implode.py    readable tree -> export XML, plus fidelity checking
 src/unifold/xref.py       cross-component call graph
 src/unifold/usage.py      entity and field usage across components
+src/unifold/workspace.py  the generated INDEX.md overview
+src/unifold/mcp.py        read-only MCP server over stdio
 src/unifold/packed.py     decoding packed lists and form layouts
 src/unifold/probe.py      structure discovery and content classification
 src/unifold/compare.py    export stability measurement

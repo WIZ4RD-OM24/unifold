@@ -12,9 +12,11 @@ from xml.etree import ElementTree as ET
 from . import compare as compare_mod
 from . import explode as explode_mod
 from . import implode as implode_mod
+from . import mcp as mcp_mod
 from . import probe as probe_mod
 from . import schemadiff as schemadiff_mod
 from . import usage as usage_mod
+from . import workspace as workspace_mod
 from . import xref as xref_mod
 from . import __version__
 
@@ -136,6 +138,23 @@ def cmd_xref(args) -> int:
             show_uncalled=not args.unresolved,
         ))
     return 0
+
+
+def cmd_index(args) -> int:
+    root = Path(args.workspace)
+    if not root.is_dir():
+        print("no such directory: %s" % root, file=sys.stderr)
+        return 2
+    if args.stdout:
+        print(workspace_mod.render(root))
+        return 0
+    target = workspace_mod.write(root, Path(args.out) if args.out else None)
+    print("wrote %s" % target)
+    return 0
+
+
+def cmd_mcp(args) -> int:
+    return mcp_mod.serve()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -272,6 +291,36 @@ def build_parser() -> argparse.ArgumentParser:
                    help="only entries nothing here calls")
     x.add_argument("--json", action="store_true", help="machine-readable output")
     x.set_defaults(func=cmd_xref)
+
+    i2 = sub.add_parser(
+        "index",
+        help="write a navigable Markdown overview of a workspace",
+        description=(
+            "Generates INDEX.md: every component and library proc with its "
+            "code files and line counts, the data model in use, and external "
+            "dependencies -- with relative links that work in an editor, on "
+            "GitHub and in a pull request. A derived view; regenerate it after "
+            "re-exploding rather than editing it."
+        ),
+    )
+    i2.add_argument("workspace", help="directory containing exploded tree(s)")
+    i2.add_argument("--out", metavar="FILE",
+                    help="write somewhere other than WORKSPACE/INDEX.md")
+    i2.add_argument("--stdout", action="store_true",
+                    help="print instead of writing a file")
+    i2.set_defaults(func=cmd_index)
+
+    m = sub.add_parser(
+        "mcp",
+        help="run a read-only MCP server over stdio",
+        description=(
+            "Serves workspace queries to an AI assistant over the Model "
+            "Context Protocol, so it can trace library procs and analyse "
+            "impact without you running commands and pasting output. "
+            "Read-only: every tool answers a question, none writes anything."
+        ),
+    )
+    m.set_defaults(func=cmd_mcp)
 
     return parser
 
